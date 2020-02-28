@@ -1,0 +1,10 @@
+#!/bin/bash
+
+CFLAGS="-O0 \
+  -I libtomcrypt/src/headers \
+  -I tomsfastmath/src/headers"
+
+LIBS="libtomcrypt/libtomcrypt.a tomsfastmath/libtfm.a"
+
+clang-9 $CFLAGS src/fota-tool.c src/buffer.c src/fota.c $LIBS -o fota-tool
+
