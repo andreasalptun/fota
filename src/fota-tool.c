@@ -45,7 +45,7 @@ static void write_chunk(buffer_t* buf, const char* name, const void* data, uint3
   assert(buf->pos + 8 + len <= buf->len);
 
   buf_write(buf, name, 4);
-  buf_write_uint32(buf, htole32(len));
+  buf_write_uint32(buf, len);
 
   if(data) {
     memcpy(buf_ptr(buf), data, len);
