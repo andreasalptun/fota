@@ -60,13 +60,8 @@ Step 3. Get a request key (use -l if local)
 
 Step 4. Run the curl command printed in step 3
 
-Example: `curl http://localhost:5001/omotion-fota/europe-west2/firmware?model=mk1&key=493040a084b5e55a6bbad18d29ac7ff8c0b1e404f97bc5a47f6ec6f89c09d17fdf924a0efba5f21191508fa321e5ca70123dea0534d93231fc771535af28c6bd429827b7ae2ea05f9e94957f5c9f15b57093c3d1901054b24d1b6cfcbdc86617211e06a6a90ef80043482249d472d3d99105c913a22e5f9e444450821cbb41ec -v --output mk1.fwpk.enc2
-`
+Example: `curl https://europe-west2-xxx-fota.cloudfunctions.net/firmware?model=mk1&key=493040a084b5e55a6bbad18d29ac7ff8c0b1e404f97bc5a47f6ec6f89c09d17fdf924a0efba5f21191508fa321e5ca70123dea0534d93231fc771535af28c6bd429827b7ae2ea05f9e94957f5c9f15b57093c3d1901054b24d1b6cfcbdc86617211e06a6a90ef80043482249d472d3d99105c913a22e5f9e444450821cbb41ec -v --output mk1.fwpk.enc2`
 
 Step 5. Verify the package
 
 `fota-tool -v mk1.fwpk.enc2`
-
-## TODO
-
-Clean up buffer.c
