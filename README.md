@@ -28,6 +28,16 @@ Run locally (use the -l flag when requesting key)
 
 `firebase emulators:start`
 
+
+## Build
+
+Apply the patch in libtomcrypt
+
+Run make in tomsfastmath and in libtomcrypt
+
+Run ./build in root
+
+
 ## Tool usage
 
 `fota-tool [-m model] [-f firmware] [-r request key] [-v verify] [-l local url]`
