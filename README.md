@@ -31,7 +31,9 @@ Run locally (use the -l flag when requesting key)
 
 ## Build
 
-Apply the patch in libtomcrypt
+Make sure all submodules are cloned `git submodule update --init --recursive`
+
+Apply the patch in libtomcrypt `patch -p1 < ../libtomcrypt.patch`
 
 Run make in tomsfastmath and in libtomcrypt
 
