@@ -69,7 +69,7 @@ const char* fota_model_id() {
   return model_id;
 }
 
-char* fota_request_key() {
+char* fota_request_token() {
   rsa_key public_key;
   if(!get_public_key(&public_key))
     return NULL;
@@ -156,7 +156,7 @@ static buffer_t* aes_decrypt(buffer_t* buf, aes_key_t key) {
   return NULL;
 }
 
-buffer_t* fota_verify(buffer_t* fwpk_enc2_buf) {
+buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf) {
   if(!fwpk_enc2_buf) return NULL;
 
   buffer_t* fwpk_enc_buf = aes_decrypt(fwpk_enc2_buf, unique_key);

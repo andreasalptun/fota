@@ -35,9 +35,18 @@ typedef unsigned char sha_hash_t[32];
 typedef unsigned char aes_key_t[AES_KEY_BITSIZE/8];
 typedef unsigned char aes_iv_t[16];
 
-void        fota_init();
+// Must be called before any of the function below
+void fota_init();
+
+// Returns a static model id string, do not free
 const char* fota_model_id();
-char*       fota_request_key();
-buffer_t*   fota_verify(buffer_t* fwpk_enc2_buf);
+
+// Generates a request token hex string for downloading the firmware package from the server
+// returned buffer should be free'd
+char* fota_request_token();
+
+// Verify package, unwrap it and return the firmware binary
+// returned buffer should be free'd
+buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf);
 
 #endif //FOTA_H

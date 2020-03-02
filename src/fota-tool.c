@@ -24,20 +24,35 @@
 
 #include <unistd.h>
 #include <stdio.h>
+#include <locale.h>
 #include <tomcrypt.h>
 
-#define ACTION_NONE        0
-#define ACTION_PACK        1
-#define ACTION_REQUEST_KEY 2
-#define ACTION_VERIFY     3
+#define ACTION_NONE           0
+#define ACTION_GENERATE_KEY   1
+#define ACTION_CREATE_PACKAGE 2
+#define ACTION_REQUEST_TOKEN  3
+#define ACTION_VERIFY_PACKAGE 4
 
 typedef struct {
-  const char* model;
+  const char* id;
   aes_key_t key;
 } model_key_t;
 
+model_key_t model_keys[] = MODEL_KEYS;
+
 static void print_usage() {
-  printf("Usage: fota-tool [-m model] [-f firmware] [-r request key] [-v verify] [-l local url]\n");
+  printf("Usage: fota-tool [-m model] [-g generate unique keys] [-f firmware file] [-r request token] [-v verify package] [-l local url]\n");
+}
+
+static int get_model_key(const char* model_id, aes_key_t* model_key) {
+  for(int i=0; i<sizeof(model_keys)/sizeof(model_key_t); i++) {
+    if(strcmp(model_keys[i].id, model_id)==0) {
+      memcpy(model_key, model_keys[i].key, sizeof(aes_key_t));
+      return 1;
+    }
+  }
+  printf("model not found: %s\n", model_id);
+  return 0;
 }
 
 static void write_chunk(buffer_t* buf, const char* name, const void* data, uint32_t len) {
@@ -53,24 +68,82 @@ static void write_chunk(buffer_t* buf, const char* name, const void* data, uint3
   }
 }
 
-static int pack_fwpk_enc(const char* filename, const char* model) {
-
-  // Find model key
-  int model_key_found = 0;
-  aes_key_t model_key;
-  model_key_t model_keys[] = MODEL_KEYS;
-  for(int i=0; i<sizeof(model_keys)/sizeof(model_key_t); i++) {
-    if(strcmp(model_keys[i].model, model)==0) {
-      memcpy(model_key, model_keys[i].key, sizeof(aes_key_t));
-      model_key_found = 1;
+void print_array(FILE* f, const uint8_t* array, uint32_t len) {
+  if(array) {
+    for(int i=0; i<len; i++) {
+      fprintf(f, "%02x", array[i]);
     }
+    fprintf(f, "\n");
   }
-  if(!model_key_found) {
-    printf("Model not found: %s\n", model);
+  else {
+    fprintf(f, "null\n");
+  }
+}
+
+static int generate_unique_keys(const char* model_id, int num_keys) {
+
+  aes_key_t model_key;
+  if(!get_model_key(model_id, &model_key)) {
     return 0;
   }
-  
-  printf("Creating firmware package for model %s\n", model);
+
+  setlocale(LC_NUMERIC, "en_US.UTF-8");
+  fprintf(stderr, "Generating unique keys for model %s, please wait...\n", model_id);
+
+  aes_key_t generator_key = GENERATOR_KEY;
+
+  aes_key_t triplet[4];
+  memcpy(triplet[0], generator_key, sizeof(aes_key_t));
+  memcpy(triplet[2], model_key, sizeof(aes_key_t));
+  memcpy(triplet[3], generator_key, sizeof(aes_key_t));
+
+  aes_key_t unique_key;
+  sha_hash_t triplet_hash;
+  hash_state hash;
+  sha_hash_t hash_zero = {0};
+
+  for(int i=0; i<num_keys; i++) {
+    int j = 0;
+    while(1) {
+
+      if((j&0xff) == 0) {
+        sprng_desc.read(unique_key, 16, NULL);
+        memcpy(triplet[1], unique_key, sizeof(aes_key_t));
+      }
+
+      if((j&0xffff) == 0) {
+        fprintf(stderr, "\rTried %'d unique id's...", j);
+        fflush(stderr);
+      }
+
+      triplet[1][0] = j&0xff;
+
+      sha256_init(&hash);
+      sha256_process(&hash, (uint8_t*)triplet, sizeof(triplet));
+      sha256_done(&hash, triplet_hash);
+
+      if(memcmp(hash_zero, triplet_hash, GENERATOR_DIFFICULTY)==0) {
+        fprintf(stderr, "Found unique key\n");
+        print_array(stdout, unique_key, 16);
+        print_array(stderr, triplet_hash, sizeof(sha_hash_t));
+        break;
+      }
+
+      j++;
+    }
+  }
+
+  return 1;
+}
+
+static int create_fwpk_enc_package(const char* filename, const char* model_id) {
+
+  aes_key_t model_key;
+  if(!get_model_key(model_id, &model_key)) {
+    return 0;
+  }
+
+  printf("Creating firmware package for model %s\n", model_id);
 
   // Import private key
   rsa_key private_key;
@@ -111,11 +184,11 @@ static int pack_fwpk_enc(const char* filename, const char* model) {
   rsa_free(&private_key);
 
   // Create package binary (.fwpk)
-  uint32_t fwpk_buf_size = 4*8 + strlen(model)+1 + firmware_buf->len + sizeof(rsa_sign_t);
+  uint32_t fwpk_buf_size = 4*8 + strlen(model_id)+1 + firmware_buf->len + sizeof(rsa_sign_t);
   uint32_t fwpk_buf_size_aligned = ALIGN16(fwpk_buf_size);
   buffer_t* fwpk_buf = buf_alloc(fwpk_buf_size_aligned);
   write_chunk(fwpk_buf, "FWPK", NULL, 0);
-  write_chunk(fwpk_buf, "MODL", model, strlen(model)+1);
+  write_chunk(fwpk_buf, "MODL", model_id, strlen(model_id)+1);
   write_chunk(fwpk_buf, "FRMW", firmware_buf->data, firmware_buf->len);
   write_chunk(fwpk_buf, "SIGN", firmware_sign, sizeof(rsa_sign_t));
   assert(fwpk_buf->pos==fwpk_buf_size);
@@ -142,15 +215,15 @@ static int pack_fwpk_enc(const char* filename, const char* model) {
   buf_print("fwpk.enc", fwpk_enc_buf);
 
   // Write package to file
-  char* filename_out = malloc(strlen(model) + 16);
-  strcpy(filename_out, model);
+  char* filename_out = malloc(strlen(model_id) + 16);
+  strcpy(filename_out, model_id);
   strcat(filename_out, ".fwpk.enc");
   buf_to_file(filename_out, fwpk_enc_buf);
 
   free(fwpk_enc_buf);
   free(filename_out);
 
-  return 0;
+  return 1;
 }
 
 int main(int argc, char* argv[]) {
@@ -159,59 +232,74 @@ int main(int argc, char* argv[]) {
   fota_init();
 
   int action = ACTION_NONE;
-  char* model = NULL;
+  char* model_id = NULL;
   char* filename = NULL;
+  int num_keys = 0;
   int local_url = 0;
 
-  while((opt = getopt(argc, argv, ":m:f:rv:l")) != -1) {
+  while((opt = getopt(argc, argv, ":m:g:f:rv:l")) != -1) {
     switch(opt)
     {
     case 'm':
-      model = strdup(optarg);
+      model_id = strdup(optarg);
+      break;
+    case 'g':
+      action = ACTION_GENERATE_KEY;
+      num_keys = atoi(optarg);
       break;
     case 'f':
-      action = ACTION_PACK;
+      action = ACTION_CREATE_PACKAGE;
       filename = strdup(optarg);
       break;
     case 'r':
-      action = ACTION_REQUEST_KEY;
+      action = ACTION_REQUEST_TOKEN;
       break;
     case 'v':
-      action = ACTION_VERIFY;
+      action = ACTION_VERIFY_PACKAGE;
       filename = strdup(optarg);
       break;
     case 'l':
       local_url = 1;
       break;
     case ':':
-    case '?':
-      print_usage();
+      printf("Missing argument for option %c\n", optopt);
+      break;
+    default:
       break;
     }
   }
 
-  if(action == ACTION_PACK) {
-    if(filename && model) {
-      if(pack_fwpk_enc(filename, model))
-        printf("Upload at https://console.firebase.google.com/u/0/project/omotion-fota/storage/omotion-fota.appspot.com/files\n");
+  if(action == ACTION_GENERATE_KEY) {
+    if(model_id) {
+      generate_unique_keys(model_id, num_keys);
     }
     else {
       printf("No model specified\n");
       print_usage();
     }
   }
-  else if(action == ACTION_REQUEST_KEY) {
-    char* request_key = fota_request_key();
-    printf("curl %s/firmware?model=%s&key=%s -v --output %s.fwpk.enc2\n",
+  else if(action == ACTION_CREATE_PACKAGE) {
+    if(filename && model_id) {
+      if(create_fwpk_enc_package(filename, model_id))
+        printf("Upload at https://console.firebase.google.com/u/0/project/xxx-fota/storage/xxx-fota.appspot.com/files\n");
+    }
+    else {
+      printf("No model specified\n");
+      print_usage();
+    }
+  }
+  else if(action == ACTION_REQUEST_TOKEN) {
+    char* request_key = fota_request_token();
+    printf("curl %s/firmware?model=%s&token=%s -v --output %s.fwpk.enc2\n",
            local_url ?
            "http://localhost:5001/omotion-fota/europe-west2" :
            "https://europe-west2-omotion-fota.cloudfunctions.net",
            fota_model_id(), request_key, fota_model_id());
   }
-  else if(action == ACTION_VERIFY) {
+  else if(action == ACTION_VERIFY_PACKAGE) {
     buffer_t* fwpk_enc2_buf = buf_from_file(filename);
 
-    buffer_t* firmware = fota_verify(fwpk_enc2_buf);
+    buffer_t* firmware = fota_verify_package(fwpk_enc2_buf);
     free(fwpk_enc2_buf);
 
     if(firmware) {
@@ -229,5 +317,5 @@ int main(int argc, char* argv[]) {
   }
 
   if(filename) free(filename);
-  if(model) free(model);
+  if(model_id) free(model_id);
 }
