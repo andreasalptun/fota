@@ -26,9 +26,8 @@
 
 extern const ltc_math_descriptor tfm_desc;
 
-// TODO This data must be unique for each vehicle and should reside in flash memory
-static uuid_t vehicle_id = {0x0e,0x5d,0x97,0x81,0x5a,0xfe,0xb1,0xf2,0xe0,0x3a,0xc3,0x11,0x75,0x13,0x4a,0x18};
-static aes_key_t unique_key = {0x68,0x7b,0x59,0xea,0xce,0x2d,0xda,0x48,0xab,0x2f,0xdb,0xbb,0xb5,0x19,0x1d,0x33};
+// TODO This unique key must be generated with the fota-tool and should reside in flash memory
+static aes_key_t unique_key = {0xf6,0xb9,0x29,0x0d,0x46,0x4d,0xdd,0x28,0x9b,0xf9,0x11,0x4e,0xfe,0xd1,0x6d,0x50};
 
 // This key is shared among all vehicles and should reside in the code segment
 static const char* model_id = MODEL_ID_MK1;
@@ -74,11 +73,11 @@ char* fota_request_token() {
   if(!get_public_key(&public_key))
     return NULL;
 
-  // TODO add vehicle_id to enable tracking
-
-  buffer_t* buf = buf_alloc(2*sizeof(aes_key_t));
+  buffer_t* buf = buf_alloc(2*sizeof(aes_key_t)+1);
   buf_write(buf, model_key, sizeof(aes_key_t));
   buf_write(buf, unique_key, sizeof(aes_key_t));
+  uint8_t diff = GENERATOR_DIFFICULTY;
+  buf_write(buf, &diff, 1);
 
   // Encrypt with public key
   rsa_cipher_t request_key;
@@ -87,7 +86,7 @@ char* fota_request_token() {
                             request_key, &request_key_len,
                             NULL, 0,
                             NULL, find_prng("sprng"),
-                            find_hash("sha1"), // nodejs only supports sha1
+                            find_hash("sha1"), // nodejs only supports sha1!?
                             &public_key);
   free(buf);
   rsa_free(&public_key);
@@ -220,7 +219,7 @@ buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf) {
                                 &valid,
                                 &public_key);
       rsa_free(&public_key);
-      
+
       if(err==CRYPT_OK && valid)
         return firmware_buf;
     }

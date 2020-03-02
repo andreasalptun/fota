@@ -52,6 +52,8 @@ const privateKey = '\n-----BEGIN RSA PRIVATE KEY-----\n' +
   '0WawYVlFv6QfTJxluiaiGbseYBgl/LwfXg65AKXZTHbv\n' +
   '-----END RSA PRIVATE KEY-----\n';
 
+const generatorKey = Buffer.from('3371ae3bdfc38d0c11d49e223a265547', 'hex');
+
 const modelKeys = {
   'mk1': Buffer.from('519219269431506468c1f899595afe29', 'hex'),
 };
@@ -64,47 +66,56 @@ exports.firmware = functions
   .https
   .onRequest(async (req, res) => {
     const AES_KEY_LEN = 16;
-    if (req.query.model && req.query.key && modelKeys[req.query.model]) {
-      const requestKey = crypto.privateDecrypt(privateKey, Buffer.from(req.query.key, 'hex'));
-      
-      if (modelKeys[req.query.model].compare(requestKey, 0, AES_KEY_LEN) == 0) {
-        const uniqueKey = requestKey.slice(AES_KEY_LEN);
+    if (req.query.model && req.query.token && modelKeys[req.query.model]) {
+      const token = crypto.privateDecrypt(privateKey, Buffer.from(req.query.token, 'hex'));
+      const modelKey = modelKeys[req.query.model];
+      if (modelKey.compare(token, 0, AES_KEY_LEN) == 0) {
+        const uniqueKey = token.slice(AES_KEY_LEN, -1);
+        const generatorDifficulty = token.readUInt8(token.length - 1);
 
-        const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv('aes-128-cbc', uniqueKey, iv);
-        
-        // TODO handle error
-        if(!fwpkEnc) {
-          try {
-            let res = await storage
-            .bucket('omotion-fota.appspot.com')
-            .file(req.query.model + '.fwpk.enc')
-            .download();
-            console.log(res);
-            fwpkEnc = res[0];
-          } catch(e) {
-            console.error(e);
-            res.sendStatus(500);
-            return;
+        // Authenticate unique key
+        const authHash = crypto
+          .createHash('sha256')
+          .update(Buffer.concat([generatorKey, uniqueKey, modelKey, generatorKey]))
+          .digest();
+
+        if (Buffer.alloc(generatorDifficulty).compare(authHash, 0, generatorDifficulty) == 0) {
+          const iv = crypto.randomBytes(16);
+          const cipher = crypto.createCipheriv('aes-128-cbc', uniqueKey, iv);
+
+          // TODO handle error
+          if (!fwpkEnc) {
+            try {
+              let res = await storage
+                .bucket('omotion-fota.appspot.com')
+                .file(req.query.model + '.fwpk.enc')
+                .download();
+              console.log(res);
+              fwpkEnc = res[0];
+            } catch (e) {
+              console.error(e);
+              res.sendStatus(500);
+              return;
+            }
           }
+
+          const padding = Buffer.alloc(16 - (fwpkEnc.length & 0xf));
+          let fwpkEnc2 = cipher.update(Buffer.concat([fwpkEnc, padding]));
+          cipher.final();
+
+          const header = Buffer.alloc(16);
+          header.write("ENCC");
+          header.writeUInt32LE(fwpkEnc.length, 4);
+          header.writeUInt32LE(fwpkEnc.length + fwpkEnc.length, 8);
+          header.writeUInt32LE(0, 12);
+
+          res.set('content-type', 'application/octet-stream')
+          res.send(Buffer.concat([header, iv, fwpkEnc2]));
+
+          return;
         }
-
-        const padding = Buffer.alloc(16 - (fwpkEnc.length & 0xf));
-        let fwpkEnc2 = cipher.update(Buffer.concat([fwpkEnc, padding]));
-        cipher.final();
-
-        const header = Buffer.alloc(16);
-        header.write("ENCC");
-        header.writeUInt32LE(fwpkEnc.length, 4);
-        header.writeUInt32LE(fwpkEnc.length + fwpkEnc.length, 8);
-        header.writeUInt32LE(0, 12);
-
-        res.set('content-type', 'application/octet-stream')
-        res.send(Buffer.concat([header, iv, fwpkEnc2]));
-
-      } else {
-        res.sendStatus(403);
       }
+      res.sendStatus(403);
     } else {
       res.sendStatus(400);
     }
@@ -118,4 +129,3 @@ exports.notifyUsers = functions
     console.log('New object ' + object.bucket + ', ' + object.name + ', ' + object.contentType);
     // TODO check file and send push notifications
   });
-  
