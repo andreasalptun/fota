@@ -21,19 +21,13 @@
 // SOFTWARE.
 
 const functions = require('firebase-functions');
+const crypto = require('crypto');
 const {
   Storage
 } = require('@google-cloud/storage');
 
 const storage = new Storage();
 
-const crypto = require('crypto');
-
-// Upload files at:
-// https://console.firebase.google.com/u/0/project/omotion-fota/storage/omotion-fota.appspot.com/files
-
-// Get file at:
-// https://europe-west2-omotion-fota.cloudfunctions.net/firmware?model=mk1&key=XXX
 
 // TODO Dummy key. Don't store the keys like this in production!!
 const privateKey = '\n-----BEGIN RSA PRIVATE KEY-----\n' +
@@ -53,6 +47,7 @@ const privateKey = '\n-----BEGIN RSA PRIVATE KEY-----\n' +
   '-----END RSA PRIVATE KEY-----\n';
 
 const generatorKey = Buffer.from('3371ae3bdfc38d0c11d49e223a265547', 'hex');
+const generatorDifficulty = 3;
 
 const modelKeys = {
   'mk1': Buffer.from('519219269431506468c1f899595afe29', 'hex'),
@@ -70,8 +65,7 @@ exports.firmware = functions
       const token = crypto.privateDecrypt(privateKey, Buffer.from(req.query.token, 'hex'));
       const modelKey = modelKeys[req.query.model];
       if (modelKey.compare(token, 0, AES_KEY_LEN) == 0) {
-        const uniqueKey = token.slice(AES_KEY_LEN, -1);
-        const generatorDifficulty = token.readUInt8(token.length - 1);
+        const uniqueKey = token.slice(AES_KEY_LEN);
 
         // Authenticate unique key
         const authHash = crypto
@@ -83,36 +77,37 @@ exports.firmware = functions
           const iv = crypto.randomBytes(16);
           const cipher = crypto.createCipheriv('aes-128-cbc', uniqueKey, iv);
 
-          // TODO handle error
-          if (!fwpkEnc) {
-            try {
+          try {
+            if (!fwpkEnc) {
               let res = await storage
                 .bucket('omotion-fota.appspot.com')
                 .file(req.query.model + '.fwpk.enc')
                 .download();
-              console.log(res);
               fwpkEnc = res[0];
-            } catch (e) {
-              console.error(e);
-              res.sendStatus(500);
-              return;
             }
+
+            const padding = Buffer.alloc(16 - (fwpkEnc.length & 0xf));
+            let fwpkEnc2 = cipher.update(Buffer.concat([fwpkEnc, padding]));
+            cipher.final();
+
+            const header = Buffer.alloc(16);
+            header.write("ENCC");
+            header.writeUInt32LE(fwpkEnc.length, 4);
+            header.writeUInt32LE(fwpkEnc.length + fwpkEnc.length, 8);
+            header.writeUInt32LE(0, 12);
+
+            res.set('content-type', 'application/octet-stream')
+            res.send(Buffer.concat([header, iv, fwpkEnc2]));
+
+            return;
+          } catch (e) {
+            console.error(e.message);
+            res.sendStatus(
+              e.response &&
+              typeof(e.response.statusCode) === 'number' && 
+              e.response.statusCode || 500);
+            return;
           }
-
-          const padding = Buffer.alloc(16 - (fwpkEnc.length & 0xf));
-          let fwpkEnc2 = cipher.update(Buffer.concat([fwpkEnc, padding]));
-          cipher.final();
-
-          const header = Buffer.alloc(16);
-          header.write("ENCC");
-          header.writeUInt32LE(fwpkEnc.length, 4);
-          header.writeUInt32LE(fwpkEnc.length + fwpkEnc.length, 8);
-          header.writeUInt32LE(0, 12);
-
-          res.set('content-type', 'application/octet-stream')
-          res.send(Buffer.concat([header, iv, fwpkEnc2]));
-
-          return;
         }
       }
       res.sendStatus(403);

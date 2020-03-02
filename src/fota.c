@@ -73,11 +73,9 @@ char* fota_request_token() {
   if(!get_public_key(&public_key))
     return NULL;
 
-  buffer_t* buf = buf_alloc(2*sizeof(aes_key_t)+1);
+  buffer_t* buf = buf_alloc(2*sizeof(aes_key_t));
   buf_write(buf, model_key, sizeof(aes_key_t));
   buf_write(buf, unique_key, sizeof(aes_key_t));
-  uint8_t diff = GENERATOR_DIFFICULTY;
-  buf_write(buf, &diff, 1);
 
   // Encrypt with public key
   rsa_cipher_t request_key;
