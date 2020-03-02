@@ -281,7 +281,8 @@ int main(int argc, char* argv[]) {
   else if(action == ACTION_CREATE_PACKAGE) {
     if(filename && model_id) {
       if(create_fwpk_enc_package(filename, model_id))
-        printf("Upload at https://console.firebase.google.com/u/0/project/xxx-fota/storage/xxx-fota.appspot.com/files\n");
+        printf("Upload at https://console.firebase.google.com/u/0/project/%s/storage/%s.appspot.com/files\n",
+               FIREBASE_PROJECT, FIREBASE_PROJECT);
     }
     else {
       printf("No model specified\n");
@@ -290,10 +291,15 @@ int main(int argc, char* argv[]) {
   }
   else if(action == ACTION_REQUEST_TOKEN) {
     char* request_key = fota_request_token();
-    printf("curl %s/firmware?model=%s&token=%s -v --output %s.fwpk.enc2\n",
-           local_url ?
-           "http://localhost:5001/omotion-fota/europe-west2" :
-           "https://europe-west2-omotion-fota.cloudfunctions.net",
+
+    const char* url[3] = { "https://europe-west2-", FIREBASE_PROJECT, ".cloudfunctions.net" };
+    if(local_url) {
+      url[0] = "http://localhost:5001/";
+      url[2] = "/europe-west2";
+    }
+
+    printf("curl %s%s%s/firmware?model=%s&token=%s -v --output %s.fwpk.enc2\n",
+           url[0], url[1], url[2],
            fota_model_id(), request_key, fota_model_id());
   }
   else if(action == ACTION_VERIFY_PACKAGE) {
