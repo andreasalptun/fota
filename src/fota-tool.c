@@ -92,13 +92,12 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
 
   aes_key_t generator_key = GENERATOR_KEY;
 
-  aes_key_t triplet[4];
-  memcpy(triplet[0], generator_key, sizeof(aes_key_t));
-  memcpy(triplet[2], model_key, sizeof(aes_key_t));
-  memcpy(triplet[3], generator_key, sizeof(aes_key_t));
+  aes_key_t auth_data[4];
+  memcpy(auth_data[0], generator_key, sizeof(aes_key_t));
+  memcpy(auth_data[2], model_key, sizeof(aes_key_t));
+  memcpy(auth_data[3], generator_key, sizeof(aes_key_t));
 
-  aes_key_t unique_key;
-  sha_hash_t triplet_hash;
+  sha_hash_t auth_hash;
   hash_state hash;
   sha_hash_t hash_zero = {0};
 
@@ -107,8 +106,9 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
     while(1) {
 
       if((j&0xff) == 0) {
-        sprng_desc.read(unique_key, 16, NULL);
-        memcpy(triplet[1], unique_key, sizeof(aes_key_t));
+        aes_key_t randomKey;
+        sprng_desc.read(randomKey, 16, NULL);
+        memcpy(auth_data[1], randomKey, sizeof(aes_key_t));
       }
 
       if((j&0xffff) == 0) {
@@ -116,16 +116,16 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
         fflush(stderr);
       }
 
-      triplet[1][0] = j&0xff;
-
+      auth_data[1][0] = j&0xff;
+      
       sha256_init(&hash);
-      sha256_process(&hash, (uint8_t*)triplet, sizeof(triplet));
-      sha256_done(&hash, triplet_hash);
+      sha256_process(&hash, (uint8_t*)auth_data, sizeof(auth_data));
+      sha256_done(&hash, auth_hash);
 
-      if(memcmp(hash_zero, triplet_hash, GENERATOR_DIFFICULTY)==0) {
+      if(memcmp(hash_zero, auth_hash, GENERATOR_DIFFICULTY)==0) {
         fprintf(stderr, "Found unique key\n");
-        print_array(stdout, unique_key, 16);
-        print_array(stderr, triplet_hash, sizeof(sha_hash_t));
+        print_array(stdout, auth_data[1], 16);
+        print_array(stderr, auth_hash, sizeof(sha_hash_t));
         break;
       }
 
