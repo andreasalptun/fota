@@ -42,11 +42,15 @@ Run ./build in root
 
 ## Tool usage
 
-`fota-tool [-m model] [-f firmware] [-r request key] [-v verify] [-l local url]`
+`fota-tool Usage: fota-tool [-m model] [-g generate unique keys] [-f firmware file] [-r request token] [-v verify package] [-l local url]`
+
+Generate a unique key for a vehicle. A unique key must be stored on flash memory for each shipped vehicle.
+
+`fota-tool -m mk1 -g 1`
 
 Step 1. Create a firmware package
 
- `fota-tool -m mk1 -f firmware.bin`
+`fota-tool -m mk1 -f firmware.bin`
 
 Step 2a (live). Upload mk1.fwpk.enc to firebase storage
 
