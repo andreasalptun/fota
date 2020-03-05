@@ -1,6 +1,3 @@
-[submodule "libtomcrypt"]
-	path = libtomcrypt
-	url = git@github.com:libtom/libtomcrypt.git
-[submodule "tomsfastmath"]
-	path = tomsfastmath
-	url = git@github.com:libtom/tomsfastmath.git
+[submodule "mbed-crypto"]
+	path = mbed-crypto
+	url = git@github.com:ARMmbed/mbed-crypto.git
