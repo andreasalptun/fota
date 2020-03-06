@@ -214,7 +214,8 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
   res = mbedtls_aes_setkey_enc(&aes, model_key, AES_KEY_BITSIZE);
   assert(res==0);
   res = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, fwpk_buf_size_aligned, iv, fwpk_buf->data, buf_ptr(fwpk_enc_buf));
-  assert(res==0);  
+  assert(res==0);
+  mbedtls_aes_free(&aes);  
   free(fwpk_buf);
   buf_print("fwpk.enc", fwpk_enc_buf);
 
@@ -293,17 +294,18 @@ int main(int argc, char* argv[]) {
     }
   }
   else if(action == ACTION_REQUEST_TOKEN) {
-    // char* request_key = fota_request_token();
-    //
-    // const char* url[3] = { "https://europe-west2-", FIREBASE_PROJECT, ".cloudfunctions.net" };
-    // if(local_mode) {
-    //   url[0] = "http://localhost:5001/";
-    //   url[2] = "/europe-west2";
-    // }
-    //
-    // printf("curl %s%s%s/firmware?model=%s&token=%s -v --output %s.fwpk.enc2\n",
-    //        url[0], url[1], url[2],
-    //        fota_model_id(), request_key, fota_model_id());
+    char* request_key = fota_request_token();
+    assert(request_key!=NULL);
+    
+    const char* url[3] = { "https://europe-west2-", FIREBASE_PROJECT, ".cloudfunctions.net" };
+    if(local_mode) {
+      url[0] = "http://localhost:5001/";
+      url[2] = "/europe-west2";
+    }
+    
+    printf("curl %s%s%s/firmware?model=%s&token=%s -v --output %s.fwpk.enc2\n",
+           url[0], url[1], url[2],
+           fota_model_id(), request_key, fota_model_id());
   }
   else if(action == ACTION_VERIFY_PACKAGE) {
     buffer_t* fwpk_enc2_buf = buf_from_file(filename);

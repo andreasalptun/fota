@@ -27,6 +27,9 @@
 #include "mbedtls/sha256.h"
 #include "fota.h"
 
+// TODO system random generator
+extern int sprng_random(void* context, uint8_t* buffer, size_t size);
+
 // TODO This unique key must be generated with the fota-tool and should reside in flash memory
 static aes_key_t unique_key = {0xf6,0xb9,0x29,0x0d,0x46,0x4d,0xdd,0x28,0x9b,0xf9,0x11,0x4e,0xfe,0xd1,0x6d,0x50};
 
@@ -34,7 +37,7 @@ static aes_key_t unique_key = {0xf6,0xb9,0x29,0x0d,0x46,0x4d,0xdd,0x28,0x9b,0xf9
 static const char* model_id = MODEL_ID_MK1;
 static aes_key_t model_key = MODEL_KEY_MK1;
 
-static void set_public_key(mbedtls_rsa_context* key, const char* exp) {
+static void get_public_key(mbedtls_rsa_context* key, const char* exp) {
   mbedtls_mpi_read_string(&key->N, 16, RSA_KEY_MODULO);
   mbedtls_mpi_read_string(&key->E, 16, exp);
   key->len = RSA_KEY_BITSIZE/8;  
@@ -50,40 +53,39 @@ const char* fota_model_id() {
 }
 
 char* fota_request_token() {
-  return NULL;
-//   rsa_key public_key;
-//   if(!get_public_key(&public_key))
-//     return NULL;
-// 
-//   buffer_t* buf = buf_alloc(2*sizeof(aes_key_t));
-//   buf_write(buf, model_key, sizeof(aes_key_t));
-//   buf_write(buf, unique_key, sizeof(aes_key_t));
-// 
-//   // Encrypt with public key
-//   rsa_cipher_t request_key;
-//   unsigned long request_key_len = sizeof(rsa_cipher_t);
-//   int err = rsa_encrypt_key(buf->data, buf->len,
-//                             request_key, &request_key_len,
-//                             NULL, 0,
-//                             NULL, find_prng("sprng"),
-//                             find_hash("sha1"), // nodejs only supports sha1!?
-//                             &public_key);
-//   free(buf);
-//   rsa_free(&public_key);
-// 
-//   if(err!=CRYPT_OK || request_key_len!=sizeof(rsa_cipher_t))
-//     return NULL;
-// 
-//   char* request_key_str = malloc(2*request_key_len+1);
-//   char* str = request_key_str;
-//   for(int i=0; i<request_key_len; i++) {
-//     int b = request_key[i];
-//     *str++ = nibble(b>>4);
-//     *str++ = nibble(b);
-//   }
-//   *str = '\0';
-// 
-//   return request_key_str;
+
+  buffer_t* buf = buf_alloc(2*sizeof(aes_key_t));
+  buf_write(buf, model_key, sizeof(aes_key_t));
+  buf_write(buf, unique_key, sizeof(aes_key_t));
+
+  // Get the public encryption key
+  mbedtls_rsa_context public_key;
+  mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
+  get_public_key(&public_key, RSA_KEY_PUBLIC_EXP); // TODO different keys for encryption and signing
+  
+  
+  // Encrypt buffer
+  rsa_cipher_t request_key;
+  // int res = mbedtls_rsa_rsaes_pkcs1_v15_encrypt(&public_key, sprng_random, NULL, MBEDTLS_RSA_PUBLIC, buf->len, buf->data, request_key);
+  int res = mbedtls_rsa_rsaes_oaep_encrypt(&public_key, sprng_random, NULL, MBEDTLS_RSA_PUBLIC, NULL, 0, buf->len, buf->data, request_key);
+  // printf("%0X\n", -res);
+  free(buf);
+  mbedtls_rsa_free(&public_key);
+
+  if(res!=0) {
+    return NULL;
+  }
+
+  char* request_key_str = malloc(2*sizeof(rsa_cipher_t)+1);
+  char* str = request_key_str;
+  for(int i=0; i<sizeof(rsa_cipher_t); i++) {
+    int b = request_key[i];
+    *str++ = nibble(b>>4);
+    *str++ = nibble(b);
+  }
+  *str = '\0';
+
+  return request_key_str;
 }
 
 typedef struct {
@@ -180,12 +182,12 @@ buffer_t* fota_verify_package(buffer_t* fwpk_buf) {
       sha_hash_t firmware_hash;
       mbedtls_sha256_ret(firmware_buf->data, firmware_buf->len, firmware_hash, 0);
 
-      // Get the public key for signature validation
+      // Get the public signing key
       mbedtls_rsa_context public_key;
       mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V15, 0);
-      set_public_key(&public_key, RSA_KEY_PUBLIC_EXP);
+      get_public_key(&public_key, RSA_KEY_PUBLIC_EXP);
 
-      // Check signature
+      // Verify signature
       int valid = !mbedtls_rsa_pkcs1_verify(&public_key, NULL, NULL, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256, 0, firmware_hash, firmware_sign);
 
       mbedtls_rsa_free(&public_key);

@@ -69,5 +69,8 @@ Step 5. Verify the package
 
 ## TODO
 
-Improve random number generator
-Proper AES padding (PKCS#7)
+- Different keys for encryption and signing
+- Improve random number generator
+- Proper AES padding (PKCS#7)
+- Use RSAES-OAEP encryption RSASSA-PSS signing if size does not increase significantly
+- Investigate if PKCS1v1.5 rsa decryption can be used on server (then we dont need oaep and sha1)
