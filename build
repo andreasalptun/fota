@@ -26,7 +26,7 @@ if [ "$1" = "client" ] || [ "$1" = "client-stripped" ]
 then
   echo "Building fota $1 $2"
   SRC="$SRC src/fota-client.c"
-  CFLAGS="-Os -m32 $CFLAGS"
+  CFLAGS="-Os -m32 -DBUFFER_NO_STDIO $CFLAGS"
   OUTPUT=fota-client 
 else
   echo "Building fota tool $2"

@@ -38,8 +38,8 @@ buffer_t* buf_alloc(uint32_t size) {
   return buf;
 }
 
+#ifndef BUFFER_NO_STDIO
 buffer_t* buf_from_file(const char* filename) {
-
   FILE* f = fopen(filename, "rb");
   if(!f) {
     fprintf(stderr, "File not found: %s\n", filename);
@@ -82,20 +82,26 @@ int buf_to_file(const char* filename, buffer_t* buf) {
 
   fprintf(stderr, "Writing file %s ", filename);
   int remaining = buf->len;
+  uint32_t savedPos = buf->pos;
+  buf->pos = 0;
   while(remaining > 0) {
     int n = fwrite(buf_ptr(buf), 1, min(1024, remaining), f);
     remaining -= n;
     if(n<0 || remaining<0) {
-      fclose(f);
-      return 0;
+      buf->pos = -1;
+      break;
     }
+    buf->pos += n;
   }
 
   fprintf(stderr, "(%d bytes)\n", buf->pos);
-
+  
+  int res = (buf->pos!=-1);
+  buf->pos = savedPos;
   fclose(f);
-  return 1;
+  return res;
 }
+#endif
 
 int buf_write(buffer_t* buf, const void* src, uint32_t n) {
   if(buf->pos + n > buf->len)
@@ -137,6 +143,7 @@ uint8_t* buf_seek(buffer_t* buf, int n) {
   return p;
 }
 
+#ifndef BUFFER_NO_STDIO
 void buf_print(const char* name, buffer_t* buf) {
   if(name) {
     fprintf(stderr, "%s: ", name);
@@ -151,3 +158,4 @@ void buf_print(const char* name, buffer_t* buf) {
     fprintf(stderr, "null\n");
   }
 }
+#endif
