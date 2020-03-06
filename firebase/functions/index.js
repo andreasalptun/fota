@@ -26,7 +26,9 @@ const {
   Storage
 } = require('@google-cloud/storage');
 
-const storage = new Storage();
+const storage = new Storage({
+  // keyFilename: 'omotion-fota-4cdb9a46f95a.json'
+});
 
 
 // TODO Dummy key. Don't store the keys like this in production!!
