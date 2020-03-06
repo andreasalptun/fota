@@ -1,0 +1,24 @@
+diff --git a/library/bignum.c b/library/bignum.c
+index d53aefd5b..e853f3320 100644
+--- a/library/bignum.c
++++ b/library/bignum.c
+@@ -49,6 +49,7 @@
+ #include "mbedtls/error.h"
+ 
+ #include <string.h>
++#include <limits.h>
+ 
+ #if defined(MBEDTLS_PLATFORM_C)
+ #include "mbedtls/platform.h"
+diff --git a/library/ctr_drbg.c b/library/ctr_drbg.c
+index 8a2920a32..bca3999f8 100644
+--- a/library/ctr_drbg.c
++++ b/library/ctr_drbg.c
+@@ -37,6 +37,7 @@
+ #include "mbedtls/error.h"
+ 
+ #include <string.h>
++#include <limits.h>
+ 
+ #if defined(MBEDTLS_FS_IO)
+ #include <stdio.h>

@@ -70,3 +70,4 @@ Step 5. Verify the package
 ## TODO
 
 Improve random number generator
+Proper AES padding (PKCS#7)

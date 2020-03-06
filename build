@@ -8,7 +8,7 @@ LIBS="mbed-crypto/library/rsa.c \
       mbed-crypto/library/oid.c \
       mbed-crypto/library/platform_util.c \
       mbed-crypto/library/rsa_internal.c \
-      mbed-crypto/library/sha256.c"
-#      mbed-crypto/library/ctr_drbg.c
+      mbed-crypto/library/sha256.c \
+      mbed-crypto/library/aes.c"
 
 clang-9 $CFLAGS src/buffer.c src/fota.c src/fota-tool.c $LIBS -o fota-tool

@@ -32,7 +32,7 @@
 
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha256.h"
-// #include "mbedtls/ctr_drbg.h"
+#include "mbedtls/aes.h"
 
 #define ACTION_NONE           0
 #define ACTION_GENERATE_KEY   1
@@ -48,7 +48,7 @@ typedef struct {
 model_key_t model_keys[] = MODEL_KEYS;
 
 static void print_usage() {
-  printf("Usage: fota-tool [-m model] [-g generate unique keys] [-f firmware file] [-r request token] [-v verify package] [-l local url]\n");
+  printf("Usage: fota-tool [-m model] [-g generate unique keys] [-f firmware file] [-r request token] [-v verify package] [-l local mode]\n");
 }
 
 static int get_model_key(const char* model_id, aes_key_t* model_key) {
@@ -198,35 +198,33 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
   free(firmware_buf);
   // buf_print("fwpk", fwpk_buf);
 
-  // // Encrypt package binary (.fwpk.enc)
-  // aes_iv_t iv;
-  // sprng_desc.read((unsigned char*)&iv, sizeof(aes_iv_t), NULL);
-  //
-  // buffer_t* fwpk_enc_buf = buf_alloc(16 + sizeof(aes_iv_t) + fwpk_buf->len);
-  // buf_write(fwpk_enc_buf, "ENCC", 4);
-  // buf_write_uint32(fwpk_enc_buf, fwpk_buf->pos);
-  // buf_write_uint32(fwpk_enc_buf, fwpk_buf->len);
-  // buf_seek(fwpk_enc_buf, 4);
-  // buf_write(fwpk_enc_buf, iv, sizeof(aes_iv_t));
-  //
-  // symmetric_CBC cbc;
-  // err = cbc_start(find_cipher("aes"), iv, model_key, sizeof(aes_key_t), 0, &cbc);
-  // assert(err==CRYPT_OK);
-  // err = cbc_encrypt(fwpk_buf->data, buf_ptr(fwpk_enc_buf), fwpk_buf_size_aligned, &cbc);
-  // assert(err==CRYPT_OK);
-  // free(fwpk_buf);
-  // buf_print("fwpk.enc", fwpk_enc_buf);
+  // Encrypt package binary (.fwpk.enc)
+  aes_iv_t iv;
+  sprng_random(NULL, (unsigned char*)&iv, sizeof(aes_iv_t));
+  
+  buffer_t* fwpk_enc_buf = buf_alloc(16 + sizeof(aes_iv_t) + fwpk_buf->len);
+  buf_write(fwpk_enc_buf, "ENCC", 4);
+  buf_write_uint32(fwpk_enc_buf, fwpk_buf->pos);
+  buf_write_uint32(fwpk_enc_buf, fwpk_buf->len);
+  buf_seek(fwpk_enc_buf, 4);
+  buf_write(fwpk_enc_buf, iv, sizeof(aes_iv_t));
+  
+  mbedtls_aes_context aes;
+  mbedtls_aes_init(&aes);
+  res = mbedtls_aes_setkey_enc(&aes, model_key, AES_KEY_BITSIZE);
+  assert(res==0);
+  res = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, fwpk_buf_size_aligned, iv, fwpk_buf->data, buf_ptr(fwpk_enc_buf));
+  assert(res==0);  
+  free(fwpk_buf);
+  buf_print("fwpk.enc", fwpk_enc_buf);
 
   // Write package to file
   char* filename_out = malloc(strlen(model_id) + 16);
   strcpy(filename_out, model_id);
-  // strcat(filename_out, ".fwpk.enc");
-  // buf_to_file(filename_out, fwpk_enc_buf);
-  strcat(filename_out, ".fwpk");
-  buf_to_file(filename_out, fwpk_buf);
+  strcat(filename_out, ".fwpk.enc");
+  buf_to_file(filename_out, fwpk_enc_buf);
 
-  // free(fwpk_enc_buf);
-  free(fwpk_buf);
+  free(fwpk_enc_buf);
   free(filename_out);
 
   return 1;
@@ -239,7 +237,7 @@ int main(int argc, char* argv[]) {
   char* model_id = NULL;
   char* filename = NULL;
   int num_keys = 0;
-  int local_url = 0;
+  int local_mode = 0;
 
   while((opt = getopt(argc, argv, ":m:g:f:rv:l")) != -1) {
     switch(opt)
@@ -263,7 +261,7 @@ int main(int argc, char* argv[]) {
       filename = strdup(optarg);
       break;
     case 'l':
-      local_url = 1;
+      local_mode = 1;
       break;
     case ':':
       printf("Missing argument for option %c\n", optopt);
@@ -284,7 +282,7 @@ int main(int argc, char* argv[]) {
   }
   else if(action == ACTION_CREATE_PACKAGE) {
     if(filename && model_id) {
-      if(create_fwpk_enc_package(filename, model_id)) {
+      if(create_fwpk_enc_package(filename, model_id) && !local_mode) {
         printf("Upload at https://console.firebase.google.com/u/0/project/%s/storage/%s.appspot.com/files\n",
                FIREBASE_PROJECT, FIREBASE_PROJECT);
       }
@@ -298,7 +296,7 @@ int main(int argc, char* argv[]) {
     // char* request_key = fota_request_token();
     //
     // const char* url[3] = { "https://europe-west2-", FIREBASE_PROJECT, ".cloudfunctions.net" };
-    // if(local_url) {
+    // if(local_mode) {
     //   url[0] = "http://localhost:5001/";
     //   url[2] = "/europe-west2";
     // }
