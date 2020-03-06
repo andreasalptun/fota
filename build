@@ -1,15 +1,43 @@
 #!/bin/bash
 
-CFLAGS="-Os -Isrc -Imbed-crypto/include -DMBEDTLS_CONFIG_FILE=\"mbedtls-config.h\""
+CC=clang
+CDEBUGFLAGS="-g -fstandalone-debug -D_GLIBCXX_DEBUG -DDEBUG"
+CFLAGS="-Isrc -Imbed-crypto/include -DMBEDTLS_CONFIG_FILE=\"mbedtls-config.h\""
 
-LIBS="mbed-crypto/library/rsa.c \
-      mbed-crypto/library/bignum.c \
-      mbed-crypto/library/md.c \
-      mbed-crypto/library/oid.c \
-      mbed-crypto/library/platform_util.c \
-      mbed-crypto/library/rsa_internal.c \
-      mbed-crypto/library/sha256.c \
-      mbed-crypto/library/sha1.c \
-      mbed-crypto/library/aes.c"
+if [ "$1" = "debug" ]
+then
+  CFLAGS="$CFLAGS $CDEBUGFLAGS"
+fi
 
-clang-9 $CFLAGS src/buffer.c src/fota.c src/fota-tool.c $LIBS -o fota-tool
+SRC="src/buffer.c \
+  src/fota.c"
+
+LIB="mbed-crypto/library/rsa.c \
+  mbed-crypto/library/bignum.c \
+  mbed-crypto/library/md.c \
+  mbed-crypto/library/oid.c \
+  mbed-crypto/library/platform_util.c \
+  mbed-crypto/library/rsa_internal.c \
+  mbed-crypto/library/sha256.c \
+  mbed-crypto/library/sha1.c \
+  mbed-crypto/library/aes.c"
+
+if [ "$1" = "client" ] || [ "$1" = "client-stripped" ]
+then
+  echo "Building fota $1"
+  SRC="$SRC src/fota-client.c"
+  CFLAGS="-Os $CFLAGS"
+  OUTPUT=fota-client 
+else
+  echo "Building fota tool"
+  SRC="$SRC src/fota-tool.c"
+  CFLAGS="$CFLAGS -DFOTA_TOOL"
+  OUTPUT=fota-tool
+fi
+
+$CC $CFLAGS $SRC $LIB -o $OUTPUT
+
+if [ "$1" = "client-stripped" ]
+then
+  strip $OUTPUT
+fi

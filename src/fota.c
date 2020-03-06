@@ -20,7 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+#ifdef FOTA_TOOL
 #include <stdio.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include "mbedtls/rsa.h"
@@ -159,7 +161,9 @@ buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf) {
       while(next_chunk(fwpk_buf, &chunk)) {
         if(strcmp(chunk.name, "MODL")==0) {
           if(strcmp((const char*)chunk.data, model_id)!=0) {
+            #ifdef FOTA_TOOL
             fprintf(stderr, "bad model id\n");
+            #endif
             free(fwpk_buf);
             return NULL;
           }
@@ -176,7 +180,9 @@ buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf) {
       free(fwpk_buf);
 
       if(!firmware_buf || !has_model) {
+        #ifdef FOTA_TOOL
         fprintf(stderr, "file corrupt\n");
+        #endif
         return NULL;
       }
 

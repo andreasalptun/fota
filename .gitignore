@@ -1,5 +1,6 @@
 *.fwpk.*
 fota-tool
+fota-client
 src/fota-config.h
 firebase/functions/omotion-fota-4cdb9a46f95a.json
 

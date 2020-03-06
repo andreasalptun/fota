@@ -29,6 +29,8 @@
 #endif
 #include "buffer.h"
 
+#include <stddef.h>
+
 #define ALIGN16(v) (((v)+15)&(~15))
 
 typedef unsigned char uuid_t[16];
@@ -37,9 +39,6 @@ typedef unsigned char rsa_cipher_t[RSA_KEY_BITSIZE/8];
 typedef unsigned char sha_hash_t[32];
 typedef unsigned char aes_key_t[AES_KEY_BITSIZE/8];
 typedef unsigned char aes_iv_t[16];
-
-// Must be called before any of the function below
-void fota_init();
 
 // Returns a static model id string, do not free
 const char* fota_model_id();
