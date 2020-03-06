@@ -1,10 +1,14 @@
 #!/bin/bash
 
-CFLAGS="-O0 \
-  -I libtomcrypt/src/headers \
-  -I tomsfastmath/src/headers"
+CFLAGS="-Os -Isrc -Imbed-crypto/include -DMBEDTLS_CONFIG_FILE=\"mbedtls-config.h\""
 
-LIBS="libtomcrypt/libtomcrypt.a tomsfastmath/libtfm.a"
+LIBS="mbed-crypto/library/rsa.c \
+      mbed-crypto/library/bignum.c \
+      mbed-crypto/library/md.c \
+      mbed-crypto/library/oid.c \
+      mbed-crypto/library/platform_util.c \
+      mbed-crypto/library/rsa_internal.c \
+      mbed-crypto/library/sha256.c"
+#      mbed-crypto/library/ctr_drbg.c
 
-clang-9 $CFLAGS src/fota-tool.c src/buffer.c src/fota.c $LIBS -o fota-tool
-
+clang-9 $CFLAGS src/buffer.c src/fota.c src/fota-tool.c $LIBS -o fota-tool

@@ -1,0 +1,7 @@
+openssl rsa -in keys/private.pem -text -noout  # export rsa key components
+
+openssl dgst -sha256 -sign keys/private.pem -out myfile.sig myfile # Sign hash
+openssl dgst -sha256 myfile # Print hash
+
+xxd -p -c 256 myfile.sig | xclip  # binary to hex to clipboard
+xxd -p -i myfile.sig  # binary to c include

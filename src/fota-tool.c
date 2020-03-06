@@ -21,11 +21,18 @@
 // SOFTWARE.
 
 #include "fota.h"
+#include "fota-private.h"
 
-#include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 #include <locale.h>
-#include <tomcrypt.h>
+#include <assert.h>
+
+#include "mbedtls/rsa.h"
+#include "mbedtls/sha256.h"
+// #include "mbedtls/ctr_drbg.h"
 
 #define ACTION_NONE           0
 #define ACTION_GENERATE_KEY   1
@@ -80,6 +87,13 @@ void print_array(FILE* f, const uint8_t* array, uint32_t len) {
   }
 }
 
+int sprng_random(void* context, uint8_t* buffer, size_t size) { // TODO improve!
+  FILE* f = fopen("/dev/urandom", "rb");
+  fread(buffer, 1, size, f);
+  fclose(f);
+  return 0;
+}
+
 static int generate_unique_keys(const char* model_id, int num_keys) {
 
   aes_key_t model_key;
@@ -98,7 +112,6 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
   memcpy(auth_data[3], generator_key, sizeof(aes_key_t));
 
   sha_hash_t auth_hash;
-  hash_state hash;
   sha_hash_t hash_zero = {0};
 
   for(int i=0; i<num_keys; i++) {
@@ -107,7 +120,7 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
 
       if((j&0xff) == 0) {
         aes_key_t randomKey;
-        sprng_desc.read(randomKey, 16, NULL);
+        sprng_random(NULL, randomKey, sizeof(aes_key_t));
         memcpy(auth_data[1], randomKey, sizeof(aes_key_t));
       }
 
@@ -117,10 +130,8 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
       }
 
       auth_data[1][0] = j&0xff;
-      
-      sha256_init(&hash);
-      sha256_process(&hash, (uint8_t*)auth_data, sizeof(auth_data));
-      sha256_done(&hash, auth_hash);
+
+      mbedtls_sha256_ret((uint8_t*)auth_data, sizeof(auth_data), auth_hash, 0);
 
       if(memcmp(hash_zero, auth_hash, GENERATOR_DIFFICULTY)==0) {
         fprintf(stderr, "Found unique key\n");
@@ -146,12 +157,16 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
   printf("Creating firmware package for model %s\n", model_id);
 
   // Import private key
-  rsa_key private_key;
-  buffer_t* private_key_buf = buf_from_file(RSA_PRIVATE_KEY_FILE);
-  assert(private_key_buf);
-  int err = rsa_import(private_key_buf->data, private_key_buf->len, &private_key);
-  assert(err==CRYPT_OK);
-  free(private_key_buf);
+  mbedtls_rsa_context private_key;
+  mbedtls_rsa_init(&private_key, MBEDTLS_RSA_PKCS_V15, 0);
+
+  mbedtls_mpi_read_string(&private_key.N, 16, RSA_KEY_MODULO);
+  mbedtls_mpi_read_string(&private_key.D, 16, RSA_KEY_PRIVATE_EXP);
+  mbedtls_mpi_read_string(&private_key.E, 16, RSA_KEY_PUBLIC_EXP);
+  private_key.len = RSA_KEY_BITSIZE/8;
+
+  int res = mbedtls_rsa_complete(&private_key);
+  assert(res==0);
 
   // Load firmware file
   buffer_t* firmware_buf = buf_from_file(filename);
@@ -161,27 +176,15 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
 
   // Create firmware hash
   sha_hash_t firmware_hash;
-  hash_state hash;
-  sha256_init(&hash);
-  err = sha256_process(&hash, firmware_buf->data, firmware_buf->len);
-  assert(err==CRYPT_OK);
-  err = sha256_done(&hash, firmware_hash);
-  assert(err==CRYPT_OK);
+  res = mbedtls_sha256_ret(firmware_buf->data, firmware_buf->len, firmware_hash, 0);
+  assert(res==0);
 
-  // Sign the firmware hash
+  // Sign the firmware hash TODO: rng
   rsa_sign_t firmware_sign;
-  unsigned long firmware_sign_len = sizeof(rsa_sign_t);
-  err = rsa_sign_hash(firmware_hash,
-                      sizeof(sha_hash_t),
-                      firmware_sign,
-                      &firmware_sign_len,
-                      NULL,
-                      find_prng("sprng"),
-                      find_hash("sha256"),
-                      8,
-                      &private_key);
-  assert(err==CRYPT_OK && firmware_sign_len == sizeof(rsa_sign_t));
-  rsa_free(&private_key);
+  res = mbedtls_rsa_pkcs1_sign(&private_key, sprng_random, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256, 0, firmware_hash, firmware_sign);
+  assert(res==0);
+
+  mbedtls_rsa_free(&private_key);
 
   // Create package binary (.fwpk)
   uint32_t fwpk_buf_size = 4*8 + strlen(model_id)+1 + firmware_buf->len + sizeof(rsa_sign_t);
@@ -195,32 +198,35 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
   free(firmware_buf);
   // buf_print("fwpk", fwpk_buf);
 
-  // Encrypt package binary (.fwpk.enc)
-  aes_iv_t iv;
-  sprng_desc.read((unsigned char*)&iv, sizeof(aes_iv_t), NULL);
-
-  buffer_t* fwpk_enc_buf = buf_alloc(16 + sizeof(aes_iv_t) + fwpk_buf->len);
-  buf_write(fwpk_enc_buf, "ENCC", 4);
-  buf_write_uint32(fwpk_enc_buf, fwpk_buf->pos);
-  buf_write_uint32(fwpk_enc_buf, fwpk_buf->len);
-  buf_seek(fwpk_enc_buf, 4);
-  buf_write(fwpk_enc_buf, iv, sizeof(aes_iv_t));
-
-  symmetric_CBC cbc;
-  err = cbc_start(find_cipher("aes"), iv, model_key, sizeof(aes_key_t), 0, &cbc);
-  assert(err==CRYPT_OK);
-  err = cbc_encrypt(fwpk_buf->data, buf_ptr(fwpk_enc_buf), fwpk_buf_size_aligned, &cbc);
-  assert(err==CRYPT_OK);
-  free(fwpk_buf);
-  buf_print("fwpk.enc", fwpk_enc_buf);
+  // // Encrypt package binary (.fwpk.enc)
+  // aes_iv_t iv;
+  // sprng_desc.read((unsigned char*)&iv, sizeof(aes_iv_t), NULL);
+  //
+  // buffer_t* fwpk_enc_buf = buf_alloc(16 + sizeof(aes_iv_t) + fwpk_buf->len);
+  // buf_write(fwpk_enc_buf, "ENCC", 4);
+  // buf_write_uint32(fwpk_enc_buf, fwpk_buf->pos);
+  // buf_write_uint32(fwpk_enc_buf, fwpk_buf->len);
+  // buf_seek(fwpk_enc_buf, 4);
+  // buf_write(fwpk_enc_buf, iv, sizeof(aes_iv_t));
+  //
+  // symmetric_CBC cbc;
+  // err = cbc_start(find_cipher("aes"), iv, model_key, sizeof(aes_key_t), 0, &cbc);
+  // assert(err==CRYPT_OK);
+  // err = cbc_encrypt(fwpk_buf->data, buf_ptr(fwpk_enc_buf), fwpk_buf_size_aligned, &cbc);
+  // assert(err==CRYPT_OK);
+  // free(fwpk_buf);
+  // buf_print("fwpk.enc", fwpk_enc_buf);
 
   // Write package to file
   char* filename_out = malloc(strlen(model_id) + 16);
   strcpy(filename_out, model_id);
-  strcat(filename_out, ".fwpk.enc");
-  buf_to_file(filename_out, fwpk_enc_buf);
+  // strcat(filename_out, ".fwpk.enc");
+  // buf_to_file(filename_out, fwpk_enc_buf);
+  strcat(filename_out, ".fwpk");
+  buf_to_file(filename_out, fwpk_buf);
 
-  free(fwpk_enc_buf);
+  // free(fwpk_enc_buf);
+  free(fwpk_buf);
   free(filename_out);
 
   return 1;
@@ -228,8 +234,6 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
 
 int main(int argc, char* argv[]) {
   int opt;
-
-  fota_init();
 
   int action = ACTION_NONE;
   char* model_id = NULL;
@@ -280,9 +284,10 @@ int main(int argc, char* argv[]) {
   }
   else if(action == ACTION_CREATE_PACKAGE) {
     if(filename && model_id) {
-      if(create_fwpk_enc_package(filename, model_id))
+      if(create_fwpk_enc_package(filename, model_id)) {
         printf("Upload at https://console.firebase.google.com/u/0/project/%s/storage/%s.appspot.com/files\n",
                FIREBASE_PROJECT, FIREBASE_PROJECT);
+      }
     }
     else {
       printf("No model specified\n");
@@ -290,22 +295,23 @@ int main(int argc, char* argv[]) {
     }
   }
   else if(action == ACTION_REQUEST_TOKEN) {
-    char* request_key = fota_request_token();
-
-    const char* url[3] = { "https://europe-west2-", FIREBASE_PROJECT, ".cloudfunctions.net" };
-    if(local_url) {
-      url[0] = "http://localhost:5001/";
-      url[2] = "/europe-west2";
-    }
-
-    printf("curl %s%s%s/firmware?model=%s&token=%s -v --output %s.fwpk.enc2\n",
-           url[0], url[1], url[2],
-           fota_model_id(), request_key, fota_model_id());
+    // char* request_key = fota_request_token();
+    //
+    // const char* url[3] = { "https://europe-west2-", FIREBASE_PROJECT, ".cloudfunctions.net" };
+    // if(local_url) {
+    //   url[0] = "http://localhost:5001/";
+    //   url[2] = "/europe-west2";
+    // }
+    //
+    // printf("curl %s%s%s/firmware?model=%s&token=%s -v --output %s.fwpk.enc2\n",
+    //        url[0], url[1], url[2],
+    //        fota_model_id(), request_key, fota_model_id());
   }
   else if(action == ACTION_VERIFY_PACKAGE) {
     buffer_t* fwpk_enc2_buf = buf_from_file(filename);
 
     buffer_t* firmware = fota_verify_package(fwpk_enc2_buf);
+    // buffer_t* firmware = 0;
     free(fwpk_enc2_buf);
 
     if(firmware) {

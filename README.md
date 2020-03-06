@@ -7,13 +7,13 @@ Generate new key pair (use 2048 bits or larger in production)
 
 `openssl genrsa -out private.pem 1024`
 
-Get the private key in binary format
+Export the key components
 
-`openssl rsa -in private.pem -outform DER -out private.der`
+`openssl rsa -in private.pem -text -noout`
 
-Get the public key in binary format
+Copy the modulus and the public exponent to `fota-config.h` and reformat them to hex strings.
 
-`openssl rsa -in private.pem -outform DER -pubout -out public.der`
+Copy the private exponent to `fota-private.h` and reformat it to a hex string.
 
 
 ## Firebase
@@ -32,10 +32,6 @@ Run locally (use the -l flag when requesting key)
 ## Build
 
 Make sure all submodules are cloned `git submodule update --init --recursive`
-
-Apply the patch in libtomcrypt `patch -p1 < ../libtomcrypt.patch`
-
-Run make in tomsfastmath and in libtomcrypt
 
 Run ./build in root
 
@@ -69,3 +65,8 @@ Example: `curl https://europe-west2-xxx-fota.cloudfunctions.net/firmware?model=m
 Step 5. Verify the package
 
 `fota-tool -v mk1.fwpk.enc2`
+
+
+## TODO
+
+Improve random number generator
