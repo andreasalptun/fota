@@ -4,7 +4,7 @@ CC=clang
 CDEBUGFLAGS="-g -fstandalone-debug -D_GLIBCXX_DEBUG -DDEBUG"
 CFLAGS="-Isrc -Imbed-crypto/include -DMBEDTLS_CONFIG_FILE=\"mbedtls-config.h\""
 
-if [ "$1" = "debug" ]
+if [ "$2" = "debug" ]
 then
   CFLAGS="$CFLAGS $CDEBUGFLAGS"
 fi
@@ -24,14 +24,14 @@ LIB="mbed-crypto/library/rsa.c \
 
 if [ "$1" = "client" ] || [ "$1" = "client-stripped" ]
 then
-  echo "Building fota $1"
+  echo "Building fota $1 $2"
   SRC="$SRC src/fota-client.c"
-  CFLAGS="-Os $CFLAGS"
+  CFLAGS="-Os -m32 $CFLAGS"
   OUTPUT=fota-client 
 else
-  echo "Building fota tool"
+  echo "Building fota tool $2"
   SRC="$SRC src/fota-tool.c"
-  CFLAGS="$CFLAGS -DFOTA_TOOL"
+  CFLAGS="-DFOTA_TOOL $CFLAGS"
   OUTPUT=fota-tool
 fi
 
@@ -40,4 +40,6 @@ $CC $CFLAGS $SRC $LIB -o $OUTPUT
 if [ "$1" = "client-stripped" ]
 then
   strip $OUTPUT
+  echo -n "Size: "
+  stat -c "%s" fota-client
 fi
