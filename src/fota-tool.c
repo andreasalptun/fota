@@ -165,8 +165,8 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
   mbedtls_mpi_read_string(&private_key.E, 16, RSA_KEY_PUBLIC_EXP);
   private_key.len = RSA_KEY_BITSIZE/8;
 
-  int res = mbedtls_rsa_complete(&private_key);
-  assert(res==0);
+  int err = mbedtls_rsa_complete(&private_key);
+  assert(!err);
 
   // Load firmware file
   buffer_t* firmware_buf = buf_from_file(filename);
@@ -176,13 +176,13 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
 
   // Create firmware hash
   sha_hash_t firmware_hash;
-  res = mbedtls_sha256_ret(firmware_buf->data, firmware_buf->len, firmware_hash, 0);
-  assert(res==0);
+  err = mbedtls_sha256_ret(firmware_buf->data, firmware_buf->len, firmware_hash, 0);
+  assert(!err);
 
   // Sign the firmware hash TODO: rng
   rsa_sign_t firmware_sign;
-  res = mbedtls_rsa_pkcs1_sign(&private_key, sprng_random, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256, 0, firmware_hash, firmware_sign);
-  assert(res==0);
+  err = mbedtls_rsa_pkcs1_sign(&private_key, sprng_random, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256, 0, firmware_hash, firmware_sign);
+  assert(!err);
 
   mbedtls_rsa_free(&private_key);
 
@@ -199,22 +199,22 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
   // buf_print("fwpk", fwpk_buf);
 
   // Encrypt package binary (.fwpk.enc)
-  aes_iv_t iv;
-  sprng_random(NULL, (unsigned char*)&iv, sizeof(aes_iv_t));
+  aes_iv_t aes_iv;
+  sprng_random(NULL, (unsigned char*)&aes_iv, sizeof(aes_iv_t));
   
   buffer_t* fwpk_enc_buf = buf_alloc(16 + sizeof(aes_iv_t) + fwpk_buf->len);
   buf_write(fwpk_enc_buf, "ENCC", 4);
   buf_write_uint32(fwpk_enc_buf, fwpk_buf->pos);
   buf_write_uint32(fwpk_enc_buf, fwpk_buf->len);
   buf_seek(fwpk_enc_buf, 4);
-  buf_write(fwpk_enc_buf, iv, sizeof(aes_iv_t));
+  buf_write(fwpk_enc_buf, aes_iv, sizeof(aes_iv_t));
   
   mbedtls_aes_context aes;
   mbedtls_aes_init(&aes);
-  res = mbedtls_aes_setkey_enc(&aes, model_key, AES_KEY_BITSIZE);
-  assert(res==0);
-  res = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, fwpk_buf_size_aligned, iv, fwpk_buf->data, buf_ptr(fwpk_enc_buf));
-  assert(res==0);
+  err = mbedtls_aes_setkey_enc(&aes, model_key, AES_KEY_BITSIZE);
+  assert(!err);
+  err = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, fwpk_buf_size_aligned, aes_iv, fwpk_buf->data, buf_ptr(fwpk_enc_buf));
+  assert(!err);
   mbedtls_aes_free(&aes);  
   free(fwpk_buf);
   buf_print("fwpk.enc", fwpk_enc_buf);

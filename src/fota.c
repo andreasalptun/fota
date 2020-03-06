@@ -25,6 +25,7 @@
 #include <string.h>
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha256.h"
+#include "mbedtls/aes.h"
 #include "fota.h"
 
 // TODO system random generator
@@ -40,7 +41,7 @@ static aes_key_t model_key = MODEL_KEY_MK1;
 static void get_public_key(mbedtls_rsa_context* key, const char* exp) {
   mbedtls_mpi_read_string(&key->N, 16, RSA_KEY_MODULO);
   mbedtls_mpi_read_string(&key->E, 16, exp);
-  key->len = RSA_KEY_BITSIZE/8;  
+  key->len = RSA_KEY_BITSIZE/8;
 }
 
 static int nibble(int val) {
@@ -62,17 +63,16 @@ char* fota_request_token() {
   mbedtls_rsa_context public_key;
   mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
   get_public_key(&public_key, RSA_KEY_PUBLIC_EXP); // TODO different keys for encryption and signing
-  
-  
+
   // Encrypt buffer
   rsa_cipher_t request_key;
-  // int res = mbedtls_rsa_rsaes_pkcs1_v15_encrypt(&public_key, sprng_random, NULL, MBEDTLS_RSA_PUBLIC, buf->len, buf->data, request_key);
-  int res = mbedtls_rsa_rsaes_oaep_encrypt(&public_key, sprng_random, NULL, MBEDTLS_RSA_PUBLIC, NULL, 0, buf->len, buf->data, request_key);
-  // printf("%0X\n", -res);
+  // int err = mbedtls_rsa_rsaes_pkcs1_v15_encrypt(&public_key, sprng_random, NULL, MBEDTLS_RSA_PUBLIC, buf->len, buf->data, request_key);
+  int err = mbedtls_rsa_rsaes_oaep_encrypt(&public_key, sprng_random, NULL, MBEDTLS_RSA_PUBLIC, NULL, 0, buf->len, buf->data, request_key);
+
   free(buf);
   mbedtls_rsa_free(&public_key);
 
-  if(res!=0) {
+  if(err) {
     return NULL;
   }
 
@@ -110,43 +110,45 @@ static int next_chunk(buffer_t* buf, chunk_t* chunk) {
   return buf->pos <= buf->len;
 }
 
-// static buffer_t* aes_decrypt(buffer_t* buf, aes_key_t key) {
-//   char tag[4];
-//   memcpy(tag, buf_seek(buf, 4), 4);
-// 
-//   if(memcmp(tag, "ENCC", 4)==0) {
-//     uint32_t len = buf_read_uint32(buf);
-//     uint32_t len_aligned = buf_read_uint32(buf);
-//     buf_seek(buf, 4);
-// 
-//     aes_iv_t aes_iv;
-//     buf_read(buf, aes_iv, sizeof(aes_iv_t));
-// 
-//     symmetric_CBC cbc;
-//     int err = cbc_start(find_cipher("aes"), aes_iv, key, sizeof(aes_key_t), 0, &cbc);
-//     if(err==CRYPT_OK) {
-// 
-//       buffer_t* out_buf = buf_alloc(len_aligned);
-//       err = cbc_decrypt(buf_ptr(buf), out_buf->data, len_aligned, &cbc);
-//       if(err==CRYPT_OK) {
-//         out_buf->len = len;
-//         return out_buf;
-//       }
-//     }
-//   }
-//   return NULL;
-// }
+static buffer_t* aes_decrypt(buffer_t* buf, aes_key_t key) {
+  char tag[4];
+  memcpy(tag, buf_seek(buf, 4), 4);
 
-// buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf) {
-//   if(!fwpk_enc2_buf) return NULL;
-// 
-//   buffer_t* fwpk_enc_buf = aes_decrypt(fwpk_enc2_buf, unique_key);
-//   if(fwpk_enc_buf) {
-//     buffer_t* fwpk_buf = aes_decrypt(fwpk_enc_buf, model_key);
-//     free(fwpk_enc_buf);
+  if(memcmp(tag, "ENCC", 4)==0) {
+    uint32_t len = buf_read_uint32(buf);
+    uint32_t len_aligned = buf_read_uint32(buf);
+    buf_seek(buf, 4);
 
-buffer_t* fota_verify_package(buffer_t* fwpk_buf) {
-  {
+    aes_iv_t aes_iv;
+    buf_read(buf, aes_iv, sizeof(aes_iv_t));
+
+    mbedtls_aes_context aes;
+    mbedtls_aes_init(&aes);
+    int err = mbedtls_aes_setkey_dec(&aes, key, AES_KEY_BITSIZE);
+    if(!err) {
+      buffer_t* out_buf = buf_alloc(len_aligned);
+      err = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, len_aligned, aes_iv, buf_ptr(buf), out_buf->data);
+      mbedtls_aes_free(&aes);
+      if(err) {
+        free(out_buf);
+      }
+      else {
+        out_buf->len = len;
+        return out_buf;
+      }
+    }
+  }
+  return NULL;
+}
+
+buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf) {
+  if(!fwpk_enc2_buf) return NULL;
+
+  buffer_t* fwpk_enc_buf = aes_decrypt(fwpk_enc2_buf, unique_key);
+  if(fwpk_enc_buf) {
+    buffer_t* fwpk_buf = aes_decrypt(fwpk_enc_buf, model_key);
+    free(fwpk_enc_buf);
+
     if(fwpk_buf && memcmp(fwpk_buf->data, "FWPK", 4)==0) {
 
       int has_model = 0;
@@ -171,7 +173,7 @@ buffer_t* fota_verify_package(buffer_t* fwpk_buf) {
           memcpy(firmware_sign, chunk.data, sizeof(rsa_sign_t));
         }
       }
-      // free(fwpk_buf);
+      free(fwpk_buf);
 
       if(!firmware_buf || !has_model) {
         fprintf(stderr, "file corrupt\n");
@@ -191,7 +193,7 @@ buffer_t* fota_verify_package(buffer_t* fwpk_buf) {
       int valid = !mbedtls_rsa_pkcs1_verify(&public_key, NULL, NULL, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256, 0, firmware_hash, firmware_sign);
 
       mbedtls_rsa_free(&public_key);
-      
+
       if(valid)
         return firmware_buf;
     }
