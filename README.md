@@ -71,6 +71,6 @@ Step 5. Verify the package
 
 - Separate keys for encryption (priv: backend, pub: vehicle) and signing (priv: tool, pub: vehicle) 
 - Improve random number generator
-- Proper AES padding (PKCS#7)
+- Proper AES padding (https://en.wikipedia.org/wiki/Padding_(cryptography)#PKCS#5_and_PKCS#7
 - Use RSAES-OAEP encryption RSASSA-PSS signing if size does not increase significantly
 - Investigate if PKCS1v1.5 rsa decryption can be used on server (then we dont need oaep and sha1)
