@@ -82,7 +82,6 @@ int buf_to_file(const char* filename, buffer_t* buf) {
 
   fprintf(stderr, "Writing file %s ", filename);
   int remaining = buf->len;
-  buf->pos = 0;
   while(remaining > 0) {
     int n = fwrite(buf_ptr(buf), 1, min(1024, remaining), f);
     remaining -= n;
@@ -90,7 +89,6 @@ int buf_to_file(const char* filename, buffer_t* buf) {
       fclose(f);
       return 0;
     }
-    buf->pos += n;
   }
 
   fprintf(stderr, "(%d bytes)\n", buf->pos);
