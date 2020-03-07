@@ -1,4 +1,4 @@
-# FOTA - firmware updater
+# FOTA - Firmware signing and encryption for over-the-air transfer
 
 
 ## Generate keys
