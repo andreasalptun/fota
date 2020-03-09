@@ -1,4 +1,5 @@
 #include "fota.h"
+#include <stddef.h>
 
 int sprng_random(void* context, uint8_t* buffer, size_t size) {
   return 0;

@@ -29,8 +29,6 @@
 #endif
 #include "buffer.h"
 
-#include <stddef.h>
-
 #define ALIGN16(v) (((v)+15)&(~15))
 
 typedef unsigned char uuid_t[16];
