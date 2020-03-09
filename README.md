@@ -69,7 +69,6 @@ Step 5. Verify the package
 
 ## TODO
 
-- Separate keys for encryption (priv: backend, pub: vehicle) and signing (priv: tool, pub: vehicle) 
 - Improve random number generator
 - Proper AES padding (https://en.wikipedia.org/wiki/Padding_(cryptography)#PKCS#5_and_PKCS#7
 - Use RSAES-OAEP encryption RSASSA-PSS signing if size does not increase significantly

@@ -32,7 +32,7 @@ const storage = new Storage({
 
 
 // TODO Dummy key. Don't store the keys like this in production!!
-const privateKey = '\n-----BEGIN RSA PRIVATE KEY-----\n' +
+const privateEncrKey = '\n-----BEGIN RSA PRIVATE KEY-----\n' +
   'MIICXQIBAAKBgQDnetwIUOcVJqpH3KXigeJMaNDtgb8JyE3ReIq//n2TQ7onPpHe\n' +
   'mDntbVXtmjQy+2nGI3c/pgQ/851Fq2HUqxJwRJtjCWTyFXbLRI+Pawxgi7K2H6+M\n' +
   'YVat7FryH1NoIc+hg+8V9RP6qv4BuQh9dAd+hhxVfk/gwqRSc/H9wCYYFwIDAQAB\n' +
@@ -64,7 +64,7 @@ exports.firmware = functions
   .onRequest(async (req, res) => {
     const AES_KEY_LEN = 16;
     if (req.query.model && req.query.token && modelKeys[req.query.model]) {
-      const token = crypto.privateDecrypt(privateKey, Buffer.from(req.query.token, 'hex'));
+      const token = crypto.privateDecrypt(privateEncrKey, Buffer.from(req.query.token, 'hex'));
       const modelKey = modelKeys[req.query.model];
       if (modelKey.compare(token, 0, AES_KEY_LEN) == 0) {
         const uniqueKey = token.slice(AES_KEY_LEN);

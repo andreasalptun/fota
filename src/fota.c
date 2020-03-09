@@ -40,9 +40,9 @@ static aes_key_t unique_key = {0xf6,0xb9,0x29,0x0d,0x46,0x4d,0xdd,0x28,0x9b,0xf9
 static const char* model_id = MODEL_ID_MK1;
 static aes_key_t model_key = MODEL_KEY_MK1;
 
-static void get_public_key(mbedtls_rsa_context* key, const char* exp) {
-  mbedtls_mpi_read_string(&key->N, 16, RSA_KEY_MODULO);
-  mbedtls_mpi_read_string(&key->E, 16, exp);
+static void get_public_key(mbedtls_rsa_context* key, const char* mod) {
+  mbedtls_mpi_read_string(&key->N, 16, mod);
+  mbedtls_mpi_read_string(&key->E, 16, RSA_KEY_PUBLIC_EXP);
   key->len = RSA_KEY_BITSIZE/8;
 }
 
@@ -64,7 +64,7 @@ char* fota_request_token() {
   // Get the public encryption key
   mbedtls_rsa_context public_key;
   mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
-  get_public_key(&public_key, RSA_KEY_PUBLIC_EXP); // TODO different keys for encryption and signing
+  get_public_key(&public_key, RSA_ENCR_KEY_MODULO);
 
   // Encrypt buffer
   rsa_cipher_t request_key;
@@ -193,7 +193,7 @@ buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf) {
       // Get the public signing key
       mbedtls_rsa_context public_key;
       mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V15, 0);
-      get_public_key(&public_key, RSA_KEY_PUBLIC_EXP);
+      get_public_key(&public_key, RSA_SIGN_KEY_MODULO);
 
       // Verify signature
       int valid = !mbedtls_rsa_pkcs1_verify(&public_key, NULL, NULL, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256, 0, firmware_hash, firmware_sign);

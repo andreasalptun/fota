@@ -21,7 +21,6 @@
 // SOFTWARE.
 
 #include "fota.h"
-#include "fota-private.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -156,12 +155,12 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
 
   printf("Creating firmware package for model %s\n", model_id);
 
-  // Import private key
+  // Import private signing key
   mbedtls_rsa_context private_key;
   mbedtls_rsa_init(&private_key, MBEDTLS_RSA_PKCS_V15, 0);
 
-  mbedtls_mpi_read_string(&private_key.N, 16, RSA_KEY_MODULO);
-  mbedtls_mpi_read_string(&private_key.D, 16, RSA_KEY_PRIVATE_EXP);
+  mbedtls_mpi_read_string(&private_key.N, 16, RSA_SIGN_KEY_MODULO);
+  mbedtls_mpi_read_string(&private_key.D, 16, RSA_SIGN_KEY_PRIVATE_EXP);
   mbedtls_mpi_read_string(&private_key.E, 16, RSA_KEY_PUBLIC_EXP);
   private_key.len = RSA_KEY_BITSIZE/8;
 
