@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "mbedtls/rsa.h"
-#include "mbedtls/sha256.h"
+#include "mbedtls/sha1.h"
 #include "mbedtls/aes.h"
 #include "fota.h"
 
@@ -188,15 +188,15 @@ buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf) {
 
       // Create firmware hash
       sha_hash_t firmware_hash;
-      mbedtls_sha256_ret(firmware_buf->data, firmware_buf->len, firmware_hash, 0);
+      mbedtls_sha1_ret(firmware_buf->data, firmware_buf->len, firmware_hash);
 
       // Get the public signing key
       mbedtls_rsa_context public_key;
-      mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V15, 0);
+      mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V21, 0);
       get_public_key(&public_key, RSA_SIGN_KEY_MODULO);
 
       // Verify signature
-      int valid = !mbedtls_rsa_pkcs1_verify(&public_key, NULL, NULL, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256, 0, firmware_hash, firmware_sign);
+      int valid = !mbedtls_rsa_pkcs1_verify(&public_key, NULL, NULL, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA1, 0, firmware_hash, firmware_sign);
 
       mbedtls_rsa_free(&public_key);
 

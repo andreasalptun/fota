@@ -31,6 +31,7 @@
 
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha256.h"
+#include "mbedtls/sha1.h"
 #include "mbedtls/aes.h"
 
 #define ACTION_NONE           0
@@ -157,7 +158,7 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
 
   // Import private signing key
   mbedtls_rsa_context private_key;
-  mbedtls_rsa_init(&private_key, MBEDTLS_RSA_PKCS_V15, 0);
+  mbedtls_rsa_init(&private_key, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
 
   mbedtls_mpi_read_string(&private_key.N, 16, RSA_SIGN_KEY_MODULO);
   mbedtls_mpi_read_string(&private_key.D, 16, RSA_SIGN_KEY_PRIVATE_EXP);
@@ -175,12 +176,12 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
 
   // Create firmware hash
   sha_hash_t firmware_hash;
-  err = mbedtls_sha256_ret(firmware_buf->data, firmware_buf->len, firmware_hash, 0);
+  err = mbedtls_sha1_ret(firmware_buf->data, firmware_buf->len, firmware_hash);
   assert(!err);
 
   // Sign the firmware hash TODO: rng
   rsa_sign_t firmware_sign;
-  err = mbedtls_rsa_pkcs1_sign(&private_key, sprng_random, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256, 0, firmware_hash, firmware_sign);
+  err = mbedtls_rsa_rsassa_pss_sign(&private_key, sprng_random, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA1, 0, firmware_hash, firmware_sign);
   assert(!err);
 
   mbedtls_rsa_free(&private_key);

@@ -6,15 +6,13 @@
 #define MBEDTLS_BIGNUM_C
 #define MBEDTLS_RSA_C
 #define MBEDTLS_MD_C
-#define MBEDTLS_PKCS1_V21 // TODO: Remove if other rsa decryption can be used on backend
-#ifdef FOTA_TOOL
-#define MBEDTLS_PKCS1_V15
-#define MBEDTLS_OID_C
-#endif
+#define MBEDTLS_PKCS1_V21
 
 // SHA
 #define MBEDTLS_SHA1_C
-#define MBEDTLS_SHA256_C
+#ifdef FOTA_TOOL
+#define MBEDTLS_SHA256_C // For unique key generation
+#endif
 
 // AES-CBC
 #define MBEDTLS_AES_C
