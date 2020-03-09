@@ -38,6 +38,12 @@ buffer_t* buf_alloc(uint32_t size) {
   return buf;
 }
 
+buffer_t* buf_copy(buffer_t* buf) {
+  buffer_t* newbuf = buf_alloc(buf->len);
+  memcpy(newbuf->data, buf->data, buf->len);
+  return newbuf;
+}
+
 #ifndef BUFFER_NO_STDIO
 buffer_t* buf_from_file(const char* filename) {
   FILE* f = fopen(filename, "rb");

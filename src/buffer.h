@@ -35,6 +35,7 @@ typedef struct {
 } buffer_t;
 
 buffer_t* buf_alloc(uint32_t size);
+buffer_t* buf_copy(buffer_t* buf);
 
 buffer_t* buf_from_file(const char* filename);
 int buf_to_file(const char* filename, buffer_t* buf);
