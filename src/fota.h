@@ -29,6 +29,10 @@
 #endif
 #include "buffer.h"
 
+#if RSA_KEY_BITSIZE/8-42 < 2*AES_KEY_BITSIZE/8
+#error RSA key too small or AES key too big
+#endif
+
 #define ALIGN16(v) (((v)+15)&(~15))
 
 typedef unsigned char uuid_t[16];
