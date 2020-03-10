@@ -95,7 +95,7 @@ exports.firmware = functions
             const header = Buffer.alloc(16);
             header.write("ENCC");
             header.writeUInt32LE(fwpkEnc.length, 4);
-            header.writeUInt32LE(fwpkEnc.length + fwpkEnc.length, 8);
+            header.writeUInt32LE(fwpkEnc.length + padding.length, 8);
             header.writeUInt32LE(0, 12);
 
             res.set('content-type', 'application/octet-stream')
