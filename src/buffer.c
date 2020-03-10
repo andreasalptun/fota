@@ -145,7 +145,7 @@ uint8_t* buf_seek(buffer_t* buf, int n) {
   if(buf->pos + n > buf->len)
     return NULL;
   uint8_t* p = buf_ptr(buf);
-  buf->pos += 4;
+  buf->pos += n;
   return p;
 }
 
