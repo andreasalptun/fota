@@ -21,6 +21,7 @@
 // SOFTWARE.
 
 #include "fota.h"
+#include "buffer.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,27 +35,40 @@
 #include "mbedtls/sha1.h"
 #include "mbedtls/aes.h"
 
-#define ACTION_NONE           0
-#define ACTION_GENERATE_KEY   1
-#define ACTION_CREATE_PACKAGE 2
-#define ACTION_REQUEST_TOKEN  3
-#define ACTION_VERIFY_PACKAGE 4
+#define ACTION_NONE             0
+#define ACTION_GENERATE_KEY     1
+#define ACTION_CREATE_PACKAGE   2
+#define ACTION_REQUEST_TOKEN    3
+#define ACTION_VERIFY_PACKAGE   4
+#define ACTION_INSTALL_FIRMWARE 5
+
+#define ALIGN16(v) (((v)+15)&(~15))
 
 typedef struct {
   const char* id;
-  aes_key_t key;
+  fota_aes_key_t key;
 } model_key_t;
 
 model_key_t model_keys[] = MODEL_KEYS;
 
+extern FILE* g_package_file;
+extern FILE* g_install_file;
+
 static void print_usage() {
-  printf("Usage: fota-tool [-m model] [-g generate unique keys] [-f firmware file] [-r request token] [-v verify package] [-l local mode]\n");
+  printf("Usage: fota-tool [-mgfrvil] <arg>\n");
+  printf("  -m <model id>      model\n");
+  printf("  -g <num keys>      generate unique keys\n");
+  printf("  -f <firmware file> create firmware package (requires -m)\n");
+  printf("  -r                 generate request token (requires -m)\n");
+  printf("  -v <package file>  verify package\n");
+  printf("  -i <package file>  install package\n");
+  printf("  -l                 local mode\n\n");
 }
 
-static int get_model_key(const char* model_id, aes_key_t* model_key) {
+static int get_model_key(const char* model_id, fota_aes_key_t* model_key) {
   for(int i=0; i<sizeof(model_keys)/sizeof(model_key_t); i++) {
     if(strcmp(model_keys[i].id, model_id)==0) {
-      memcpy(model_key, model_keys[i].key, sizeof(aes_key_t));
+      memcpy(model_key, model_keys[i].key, sizeof(fota_aes_key_t));
       return 1;
     }
   }
@@ -62,20 +76,7 @@ static int get_model_key(const char* model_id, aes_key_t* model_key) {
   return 0;
 }
 
-static void write_chunk(buffer_t* buf, const char* name, const void* data, uint32_t len) {
-  assert(strlen(name)==4);
-  assert(buf->pos + 8 + len <= buf->len);
-
-  buf_write(buf, name, 4);
-  buf_write_uint32(buf, len);
-
-  if(data) {
-    memcpy(buf_ptr(buf), data, len);
-    buf->pos += len;
-  }
-}
-
-void print_array(FILE* f, const uint8_t* array, uint32_t len) {
+static void print_array(FILE* f, const uint8_t* array, uint32_t len) {
   if(array) {
     for(int i=0; i<len; i++) {
       fprintf(f, "%02x", array[i]);
@@ -87,16 +88,14 @@ void print_array(FILE* f, const uint8_t* array, uint32_t len) {
   }
 }
 
-int sprng_random(void* context, uint8_t* buffer, size_t size) { // TODO improve!
-  FILE* f = fopen("/dev/urandom", "rb");
-  fread(buffer, 1, size, f);
-  fclose(f);
-  return 0;
+static int nibble(int val) {
+  unsigned int v = (val&0xf);
+  return v>9 ? v-10+'a' : v+'0';
 }
 
 static int generate_unique_keys(const char* model_id, int num_keys) {
 
-  aes_key_t model_key;
+  fota_aes_key_t model_key;
   if(!get_model_key(model_id, &model_key)) {
     return 0;
   }
@@ -104,24 +103,24 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
   setlocale(LC_NUMERIC, "en_US.UTF-8");
   fprintf(stderr, "Generating unique keys for model %s, please wait...\n", model_id);
 
-  aes_key_t generator_key = GENERATOR_KEY;
+  fota_aes_key_t generator_key = GENERATOR_KEY;
 
-  aes_key_t auth_data[4];
-  memcpy(auth_data[0], generator_key, sizeof(aes_key_t));
-  memcpy(auth_data[2], model_key, sizeof(aes_key_t));
-  memcpy(auth_data[3], generator_key, sizeof(aes_key_t));
+  fota_aes_key_t auth_data[4];
+  memcpy(auth_data[0], generator_key, sizeof(fota_aes_key_t));
+  memcpy(auth_data[2], model_key, sizeof(fota_aes_key_t));
+  memcpy(auth_data[3], generator_key, sizeof(fota_aes_key_t));
 
-  sha_hash_t auth_hash;
-  sha_hash_t hash_zero = {0};
+  fota_sha_hash_t auth_hash;
+  fota_sha_hash_t hash_zero = {0};
 
   for(int i=0; i<num_keys; i++) {
     int j = 0;
     while(1) {
 
       if((j&0xff) == 0) {
-        aes_key_t randomKey;
-        sprng_random(NULL, randomKey, sizeof(aes_key_t));
-        memcpy(auth_data[1], randomKey, sizeof(aes_key_t));
+        fota_aes_key_t randomKey;
+        fotai_generate_random(randomKey, sizeof(fota_aes_key_t));
+        memcpy(auth_data[1], randomKey, sizeof(fota_aes_key_t));
       }
 
       if((j&0xffff) == 0) {
@@ -136,7 +135,7 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
       if(memcmp(hash_zero, auth_hash, GENERATOR_DIFFICULTY)==0) {
         fprintf(stderr, "Found unique key\n");
         print_array(stdout, auth_data[1], 16);
-        print_array(stderr, auth_hash, sizeof(sha_hash_t));
+        print_array(stderr, auth_hash, sizeof(fota_sha_hash_t));
         break;
       }
 
@@ -147,9 +146,15 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
   return 1;
 }
 
-static int create_fwpk_enc_package(const char* filename, const char* model_id) {
+static int generate_random(void* ctx, uint8_t* buf, size_t len) {
+  fotai_generate_random(buf, len);
+  return 0;
+}
 
-  aes_key_t model_key;
+static int create_fwpk_enc_package(const char* filename, const char* model_id) {
+  assert(FOTA_STORAGE_PAGE_SIZE >= 16 + strlen(model_id)+1);
+
+  fota_aes_key_t model_key;
   if(!get_model_key(model_id, &model_key)) {
     return 0;
   }
@@ -160,9 +165,12 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
   mbedtls_rsa_context private_key;
   mbedtls_rsa_init(&private_key, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
 
-  mbedtls_mpi_read_string(&private_key.N, 16, RSA_SIGN_KEY_MODULO);
-  mbedtls_mpi_read_string(&private_key.D, 16, RSA_SIGN_KEY_PRIVATE_EXP);
-  mbedtls_mpi_read_string(&private_key.E, 16, RSA_KEY_PUBLIC_EXP);
+  fota_rsa_key_t modulo;
+  fotai_get_public_key(modulo, FOTA_PUBLIC_KEY_TYPE_SIGNING);
+  
+  mbedtls_mpi_read_binary(&private_key.N, modulo, sizeof(fota_rsa_key_t));
+  mbedtls_mpi_read_string(&private_key.D, 16, FOTA_RSA_SIGN_KEY_PRIVATE_EXPONENT);
+  mbedtls_mpi_lset (&private_key.E, OPENSSL_RSA_PUBLIC_EXPONENT);
   private_key.len = RSA_KEY_BITSIZE/8;
 
   int err = mbedtls_rsa_complete(&private_key);
@@ -175,45 +183,47 @@ static int create_fwpk_enc_package(const char* filename, const char* model_id) {
   }
 
   // Create firmware hash
-  sha_hash_t firmware_hash;
+  fota_sha_hash_t firmware_hash;
   err = mbedtls_sha1_ret(firmware_buf->data, firmware_buf->len, firmware_hash);
   assert(!err);
 
   // Sign the firmware hash TODO: rng
-  rsa_sign_t firmware_sign;
-  err = mbedtls_rsa_rsassa_pss_sign(&private_key, sprng_random, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA1, 0, firmware_hash, firmware_sign);
+  fota_rsa_key_t firmware_sign;
+  err = mbedtls_rsa_rsassa_pss_sign(&private_key, generate_random, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA1, 0, firmware_hash, firmware_sign);
   assert(!err);
 
   mbedtls_rsa_free(&private_key);
 
-  // Create package binary (.fwpk)
-  uint32_t fwpk_buf_size = 4*8 + strlen(model_id)+1 + firmware_buf->len + sizeof(rsa_sign_t);
-  uint32_t fwpk_buf_size_aligned = ALIGN16(fwpk_buf_size);
-  buffer_t* fwpk_buf = buf_alloc(fwpk_buf_size_aligned);
-  write_chunk(fwpk_buf, "FWPK", NULL, 0);
-  write_chunk(fwpk_buf, "MODL", model_id, strlen(model_id)+1);
-  write_chunk(fwpk_buf, "FRMW", firmware_buf->data, firmware_buf->len);
-  write_chunk(fwpk_buf, "SIGN", firmware_sign, sizeof(rsa_sign_t));
-  assert(fwpk_buf->pos==fwpk_buf_size);
+  // Create firmware package (.fwpk)
+  buffer_t* fwpk_buf = buf_alloc(2*FOTA_STORAGE_PAGE_SIZE + ALIGN16(firmware_buf->len));
+  buf_write(fwpk_buf, "FWPK", 4);
+  buf_write_uint32(fwpk_buf, firmware_buf->len);
+  buf_seekto(fwpk_buf, 16);
+  buf_write(fwpk_buf, model_id, strlen(model_id)+1);
+  buf_seekto(fwpk_buf, FOTA_STORAGE_PAGE_SIZE);
+  buf_write(fwpk_buf, firmware_sign, sizeof(fota_rsa_key_t));
+  buf_seekto(fwpk_buf, 2*FOTA_STORAGE_PAGE_SIZE);
+  buf_write(fwpk_buf, firmware_buf->data, firmware_buf->len);
+  
   free(firmware_buf);
   // buf_print("fwpk", fwpk_buf);
 
   // Encrypt package binary (.fwpk.enc)
-  aes_iv_t aes_iv;
-  sprng_random(NULL, (unsigned char*)&aes_iv, sizeof(aes_iv_t));
+  fota_aes_iv_t aes_iv;
+  fotai_generate_random(aes_iv, sizeof(fota_aes_iv_t));
   
-  buffer_t* fwpk_enc_buf = buf_alloc(16 + sizeof(aes_iv_t) + fwpk_buf->len);
+  buffer_t* fwpk_enc_buf = buf_alloc(FOTA_STORAGE_PAGE_SIZE + fwpk_buf->len);
   buf_write(fwpk_enc_buf, "ENCC", 4);
-  buf_write_uint32(fwpk_enc_buf, fwpk_buf->pos);
   buf_write_uint32(fwpk_enc_buf, fwpk_buf->len);
-  buf_seek(fwpk_enc_buf, 4);
-  buf_write(fwpk_enc_buf, aes_iv, sizeof(aes_iv_t));
+  buf_seekto(fwpk_enc_buf, 16);
+  buf_write(fwpk_enc_buf, aes_iv, sizeof(fota_aes_iv_t));
+  buf_seekto(fwpk_enc_buf, FOTA_STORAGE_PAGE_SIZE);
   
   mbedtls_aes_context aes;
   mbedtls_aes_init(&aes);
   err = mbedtls_aes_setkey_enc(&aes, model_key, AES_KEY_BITSIZE);
   assert(!err);
-  err = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, fwpk_buf_size_aligned, aes_iv, fwpk_buf->data, buf_ptr(fwpk_enc_buf));
+  err = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, fwpk_buf->len, aes_iv, fwpk_buf->data, buf_ptr(fwpk_enc_buf));
   assert(!err);
   mbedtls_aes_free(&aes);  
   free(fwpk_buf);
@@ -240,7 +250,7 @@ int main(int argc, char* argv[]) {
   int num_keys = 0;
   int local_mode = 0;
 
-  while((opt = getopt(argc, argv, ":m:g:f:rv:l")) != -1) {
+  while((opt = getopt(argc, argv, ":m:g:f:rv:i:l")) != -1) {
     switch(opt)
     {
     case 'm':
@@ -259,6 +269,10 @@ int main(int argc, char* argv[]) {
       break;
     case 'v':
       action = ACTION_VERIFY_PACKAGE;
+      filename = strdup(optarg);
+      break;
+    case 'i':
+      action = ACTION_INSTALL_FIRMWARE;
       filename = strdup(optarg);
       break;
     case 'l':
@@ -294,8 +308,18 @@ int main(int argc, char* argv[]) {
     }
   }
   else if(action == ACTION_REQUEST_TOKEN) {
-    char* request_key = fota_request_token();
-    assert(request_key!=NULL);
+    fota_token_t token;
+    int res = fota_request_token(token);
+    assert(res!=0);
+    
+    char token_hex[2*sizeof(fota_token_t)+1];
+    char* p = token_hex;
+    for(int i=0; i<sizeof(fota_token_t); i++) {
+      int b = token[i];
+      *p++ = nibble(b>>4);
+      *p++ = nibble(b);
+    }
+    *p = '\0';
     
     const char* url[3] = { "https://europe-west2-", FIREBASE_PROJECT, ".cloudfunctions.net" };
     if(local_mode) {
@@ -305,24 +329,45 @@ int main(int argc, char* argv[]) {
     
     printf("curl %s%s%s/firmware?model=%s&token=%s -v --output %s.fwpk.enc2\n",
            url[0], url[1], url[2],
-           fota_model_id(), request_key, fota_model_id());
+           fota_model_id(), token_hex, fota_model_id());
   }
   else if(action == ACTION_VERIFY_PACKAGE) {
-    buffer_t* fwpk_enc2_buf = buf_from_file(filename);
+    
+    g_package_file = fopen(filename, "rb");
 
-    buffer_t* firmware = fota_verify_package(fwpk_enc2_buf);
-    // buffer_t* firmware = 0;
-    free(fwpk_enc2_buf);
-
-    if(firmware) {
+    if(fota_verify_package()) {
       printf("Firmware is verified, proceed to installing the update!\n");
-      printf("Contents: %s (len: %d)\n", firmware->data, firmware->len);
     }
     else {
-      printf("Firmware did not pass verification\n");
+      printf("Firmware did not pass verification!\n");
     }
+    
+    fclose(g_package_file);
+    g_package_file = NULL;
+  }
+  else if(action == ACTION_INSTALL_FIRMWARE) {
 
-    free(firmware);
+    char* filename_install = malloc(strlen(filename) + 16);
+    strcpy(filename_install, filename);
+    strcat(filename_install, ".inst");
+    
+    g_package_file = fopen(filename, "rb");
+    g_install_file = fopen(filename_install, "wb");
+    
+    if(fota_install_package()) {
+      printf("Firmware is installed to file %s!\n", filename_install);
+    }
+    else {
+      printf("Firmware installation failed!\n");
+    }
+    
+    fclose(g_package_file);
+    fclose(g_install_file);
+    
+    g_package_file = NULL;
+    g_install_file = NULL;
+
+    free(filename_install);
   }
   else {
     print_usage();

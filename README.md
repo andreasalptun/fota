@@ -67,17 +67,27 @@ The number of leading zeros is the `generatorDifficulty` = the security level of
 
 ## Generate RSA keys
 
-Generate 2 new key pairs, one for encryption and one for signing. Use 2048 bits or larger in production.
+Generate two new key pairs, one for encryption and one for signing. Use 2048 bits or larger in production.
 
 `openssl genrsa -out private.pem 1024`
 
-Export the key components
+Extract the key components
 
-`openssl rsa -in private.pem -text -noout`
+`openssl rsa -in private.pem -text -noout > private.txt`
 
-Copy the modulus and the public exponents to `fota-config.h` and reformat them to hex strings.
+Open `private.txt` in a text editor and remove everything except the modulus section. Remove the first 0 byte and make sure the size is correct (should be RSA_KEY_BITSIZE/8 bytes).
 
-Copy the private exponent for the signing key to `fota-private.h` and reformat it to a hex string.
+Convert the hex into binary
+
+`xxd -r -p private.txt private.bin`
+
+Store the data in this file in a suitable memory location, preferably an external flash memory.
+
+For testing purposes, the binary can be converted to a c-include
+
+`xxd -i private.bin private.h`
+
+Copy the private exponent from the `private.txt` file to `fota-config.h` and reformat it into a hex string.
 
 Copy the private encryption key pem to firebase/functions/index.js. Note: the private key should not be stored in clear text like in the example.
 

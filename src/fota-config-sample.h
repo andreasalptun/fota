@@ -1,17 +1,17 @@
 // MIT License
-// 
+//
 // Copyright (c) 2020 Andreas Alptun
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -23,12 +23,15 @@
 #ifndef FOTA_CONFIG_H
 #define FOTA_CONFIG_H
 
+// TODO add FOTA_ prefix
+
 #warning "Sample config! Copy fota-config-sample.h to fota-config.h and use project specific keys"
 
-// Firebase project
-#ifdef FOTA_TOOL
-#define FIREBASE_PROJECT "xxx-fota"
-#endif
+// System config
+// Page size of the memory on which the downloaded firmware package is stored, usually an external flash chip
+#define FOTA_STORAGE_PAGE_SIZE 256
+// Page size of the memory where the firmware will be installed, usually internal flash
+#define FOTA_INSTALL_PAGE_SIZE 512
 
 // Crypto config
 #define RSA_KEY_BITSIZE 1024
@@ -45,17 +48,17 @@
 #define GENERATOR_DIFFICULTY 3
 #endif
 
-// Public keys
-#define RSA_KEY_PUBLIC_EXP "010001"
-#define RSA_SIGN_KEY_MODULO "c7ae3495bcfb87f3fd94f6d679135bd7ec6e23dca3bf8a9d5e30cfa368d33baa06b148666342a6f9fd2f6cc06283a81c33954c6c8e5262f0ed39c7e4a35fe823209ebff651576370343bd9e65db06caef2db252de76206c77661f2f3fb5683ac29d912853c501d7b86dda420cfb7ad947c596f8f602b5fe476d41fe0dab7b149"
-#define RSA_ENCR_KEY_MODULO "e77adc0850e71526aa47dca5e281e24c68d0ed81bf09c84dd1788abffe7d9343ba273e91de9839ed6d55ed9a3432fb69c623773fa6043ff39d45ab61d4ab1270449b630964f21576cb448f8f6b0c608bb2b61faf8c6156adec5af21f536821cfa183ef15f513faaafe01b9087d74077e861c557e4fe0c2a45273f1fdc0261817"
-
-// Private keys
+// Private key
 #ifdef FOTA_TOOL
 #define RSA_SIGN_KEY_PRIVATE_EXP "9f51ad7f33b3f57b857e8f9bfc2aa803160fa2e96e756b61b83f75cc49dd1023cf07305f111fa31e9f1671cce64d699a66c5de9e56c8014d7dd9b65604cc86e7e7388ea0623fe9911a38bdd448e86fe061dc67f5a8dbeda8f14af50c845fd254c03167379a8ccc9c43365e992dbe8af1e3ec34e8c8a502312395ffe2ce273a21"
 #endif
 
 // NOTE:
 // Private encryption key pem and generator key+difficulty must also be added to firebase/functions/index.js
+
+// Firebase project
+#ifdef FOTA_TOOL
+#define FIREBASE_PROJECT "xxx-fota"
+#endif
 
 #endif //FOTA_CONFIG_H

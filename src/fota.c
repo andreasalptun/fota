@@ -1,17 +1,17 @@
 // MIT License
-// 
+//
 // Copyright (c) 2020 Andreas Alptun
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -27,183 +27,221 @@
 #include <string.h>
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha1.h"
-#include "mbedtls/aes.h"
 #include "fota.h"
 
-// TODO system random generator
-extern int sprng_random(void* context, uint8_t* buffer, size_t size);
+#define PROCESS_MODE_VERIFY 0
+#define PROCESS_MODE_INSTALL 1
 
-// TODO This unique key must be generated with the fota-tool and should reside in flash memory
-static aes_key_t unique_key = {0xf6,0xb9,0x29,0x0d,0x46,0x4d,0xdd,0x28,0x9b,0xf9,0x11,0x4e,0xfe,0xd1,0x6d,0x50};
+typedef struct {
+  void* ctx;
+  fota_aes_iv_t iv;
+  uint32_t len;
+} aes_decrypt_t;
 
-// This key is shared among all vehicles and should reside in the code segment
+// TODO model key -> revision key/version key (search for vehicle)
+// The model key is shared among systems of same revision and should reside in the code segment
 static const char* model_id = MODEL_ID_MK1;
-static aes_key_t model_key = MODEL_KEY_MK1;
+static fota_aes_key_t model_key = MODEL_KEY_MK1;
 
-static void get_public_key(mbedtls_rsa_context* key, const char* mod) {
-  mbedtls_mpi_read_string(&key->N, 16, mod);
-  mbedtls_mpi_read_string(&key->E, 16, RSA_KEY_PUBLIC_EXP);
+// Static functions
+//
+
+static inline int min(int a, int b) {
+  return a<b ? a : b;
+}
+
+static int generate_random(void* ctx, uint8_t* buf, size_t len) {
+  fotai_generate_random(buf, len);
+  return 0;
+}
+
+static void get_public_key(mbedtls_rsa_context* key, int type) {
+  fota_rsa_key_t public_key_mod;
+  fotai_get_public_key(public_key_mod, type);
+
+  mbedtls_mpi_read_binary(&key->N, public_key_mod, sizeof(fota_rsa_key_t));
+  mbedtls_mpi_lset (&key->E, OPENSSL_RSA_PUBLIC_EXPONENT);
   key->len = RSA_KEY_BITSIZE/8;
 }
 
-static int nibble(int val) {
-  unsigned int v = (val&0xf);
-  return v>9 ? v-10+'a' : v+'0';
+static void read_storage_page(uint8_t* buf, int page, aes_decrypt_t* decrypt_unique, aes_decrypt_t* decrypt_model) {
+
+  uint8_t temp_buf[FOTA_STORAGE_PAGE_SIZE];
+  uint8_t* b0 = buf;
+  uint8_t* b1 = temp_buf;
+
+  if(page==1) {
+    b0 = temp_buf;
+    b1 = buf;
+  }
+
+  fotai_read_storage_page(b0, page);
+
+  if(page>0 && decrypt_unique) {
+    fotai_aes_decrypt_block(b0, b1, FOTA_STORAGE_PAGE_SIZE, decrypt_unique->iv, decrypt_unique->ctx);
+  }
+  if(page>1 && decrypt_model) {
+    fotai_aes_decrypt_block(b1, b0, FOTA_STORAGE_PAGE_SIZE, decrypt_model->iv, decrypt_model->ctx);
+  }
 }
+
+static void decrypt_init(aes_decrypt_t* decrypt, fota_aes_key_t key, uint8_t* buf) {
+  if(memcmp(buf, "ENCC", 4)==0) {
+    fotai_aes_decrypt_init(key, &decrypt->ctx);
+    decrypt->len = le32toh(*((uint32_t*)(buf + 4)));
+    memcpy(decrypt->iv, buf+16, sizeof(fota_aes_iv_t));
+  }
+}
+
+static void decrypt_free(aes_decrypt_t* decrypt) {
+  fotai_aes_decrypt_free(decrypt->ctx);
+}
+
+static int process_package(int mode) {
+  uint8_t storage_page[FOTA_STORAGE_PAGE_SIZE];
+  aes_decrypt_t decrypt_unique, decrypt_model;
+  int res = 0;
+
+  // Get the unique key
+  fota_aes_key_t unique_key;
+  fotai_get_unique_key(unique_key);
+
+  // Read unique encrypted container header
+  read_storage_page(storage_page, 0, NULL, NULL);
+  decrypt_init(&decrypt_unique, unique_key, storage_page);
+
+  // Read model encrypted container header
+  read_storage_page(storage_page, 1, &decrypt_unique, NULL);
+  decrypt_init(&decrypt_model, model_key, storage_page);
+
+  // Read firmware package header
+  read_storage_page(storage_page, 2, &decrypt_unique, &decrypt_model);
+
+  if(memcmp(storage_page, "FWPK", 4)==0) {
+
+    uint32_t firmware_len = le32toh(*((uint32_t*)(storage_page+4)));
+
+    if(strcmp((const char*)(storage_page+16), model_id)==0) {
+
+      // Read firmware signature (must read all pages consecutively)
+      read_storage_page(storage_page, 3, &decrypt_unique, &decrypt_model);
+
+      if(mode == PROCESS_MODE_INSTALL) {
+        uint8_t firmware_page_buf[FOTA_INSTALL_PAGE_SIZE];
+
+        int storage_page_index = 4;
+        int remaining = firmware_len;
+
+        int firmware_page_offset = 0;
+        int firmware_page_index = 0;
+        int firmware_page_len = 0;
+
+        while(remaining>0) {
+
+          // Read firmware
+          read_storage_page(firmware_page_buf + firmware_page_offset, storage_page_index, &decrypt_unique, &decrypt_model);
+
+          int n = min(FOTA_STORAGE_PAGE_SIZE, remaining);
+          firmware_page_len += n;
+
+          remaining -= n;
+          storage_page_index++;
+          firmware_page_offset += FOTA_STORAGE_PAGE_SIZE;
+
+          if(firmware_page_offset >= FOTA_INSTALL_PAGE_SIZE || n < FOTA_STORAGE_PAGE_SIZE) {
+            fotai_write_firmware_page(firmware_page_buf, firmware_page_index++, firmware_page_len);
+            firmware_page_offset = 0;
+            firmware_page_len = 0;
+          }
+        }
+        res = 1;
+      }
+      else {
+        mbedtls_sha1_context sha_ctx;
+        fota_rsa_key_t firmware_sign;
+        fota_sha_hash_t firmware_hash;
+
+        memcpy(firmware_sign, storage_page, sizeof(fota_rsa_key_t));
+
+        mbedtls_sha1_init(&sha_ctx);
+        mbedtls_sha1_starts_ret(&sha_ctx);
+
+        int page = 4;
+        int remaining = firmware_len;
+        while(remaining>0) {
+
+          // Read firmware
+          read_storage_page(storage_page, page, &decrypt_unique, &decrypt_model);
+
+          int n = min(FOTA_STORAGE_PAGE_SIZE, remaining);
+
+          mbedtls_sha1_update_ret(&sha_ctx, storage_page, n);
+
+          remaining -= n;
+          page++;
+        }
+
+        mbedtls_sha1_finish(&sha_ctx, firmware_hash);
+        mbedtls_sha1_free(&sha_ctx);
+
+        // Get the public signing key
+        mbedtls_rsa_context public_key;
+        mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V21, 0);
+        get_public_key(&public_key, FOTA_PUBLIC_KEY_TYPE_SIGNING);
+
+        // Verify signature
+        res = !mbedtls_rsa_pkcs1_verify(&public_key, NULL, NULL, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA1, 0, firmware_hash, firmware_sign);
+        mbedtls_rsa_free(&public_key);
+      }
+    }
+    else {
+#ifdef FOTA_TOOL
+      fprintf(stderr, "Error: Bad model id\n");
+#endif
+    }
+  }
+
+  decrypt_free(&decrypt_unique);
+  decrypt_free(&decrypt_model);
+
+  return res;
+}
+
+// API functions
+//
 
 const char* fota_model_id() {
   return model_id;
 }
 
-char* fota_request_token() {
+int fota_request_token(fota_token_t token) {
 
-  buffer_t* buf = buf_alloc(2*sizeof(aes_key_t));
-  buf_write(buf, model_key, sizeof(aes_key_t));
-  buf_write(buf, unique_key, sizeof(aes_key_t));
+  // Get the unique key
+  fota_aes_key_t unique_key;
+  fotai_get_unique_key(unique_key);
+
+  // Create the request token content
+  uint8_t buf[2*sizeof(fota_aes_key_t)];
+  memcpy(buf, model_key, sizeof(fota_aes_key_t));
+  memcpy(buf+sizeof(fota_aes_key_t), unique_key, sizeof(fota_aes_key_t));
 
   // Get the public encryption key
   mbedtls_rsa_context public_key;
   mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
-  get_public_key(&public_key, RSA_ENCR_KEY_MODULO);
+  get_public_key(&public_key, FOTA_PUBLIC_KEY_TYPE_ENCRYPTION);
 
   // Encrypt buffer
-  rsa_cipher_t request_key;
-  // int err = mbedtls_rsa_rsaes_pkcs1_v15_encrypt(&public_key, sprng_random, NULL, MBEDTLS_RSA_PUBLIC, buf->len, buf->data, request_key);
-  int err = mbedtls_rsa_rsaes_oaep_encrypt(&public_key, sprng_random, NULL, MBEDTLS_RSA_PUBLIC, NULL, 0, buf->len, buf->data, request_key);
+  int err = mbedtls_rsa_rsaes_oaep_encrypt(&public_key, generate_random, NULL, MBEDTLS_RSA_PUBLIC, NULL, 0, sizeof(buf), (unsigned char*)buf, token);
 
-  free(buf);
   mbedtls_rsa_free(&public_key);
 
-  if(err) {
-    return NULL;
-  }
-
-  char* request_key_str = malloc(2*sizeof(rsa_cipher_t)+1);
-  char* str = request_key_str;
-  for(int i=0; i<sizeof(rsa_cipher_t); i++) {
-    int b = request_key[i];
-    *str++ = nibble(b>>4);
-    *str++ = nibble(b);
-  }
-  *str = '\0';
-
-  return request_key_str;
+  return !err;
 }
 
-typedef struct {
-  char name[8];
-  uint32_t len;
-  uint8_t* data;
-} chunk_t;
-
-static int next_chunk(buffer_t* buf, chunk_t* chunk) {
-  int remaining = buf->len - buf->pos;
-
-  // Buffer may be padded with zeros, no chunk
-  if(remaining<8 || !*buf_ptr(buf))
-    return 0;
-
-  memcpy(chunk->name, buf_seek(buf, 4), 4);
-  chunk->name[4] = 0;
-  chunk->len = buf_read_uint32(buf);
-  chunk->data = buf_ptr(buf);
-  buf->pos += chunk->len;
-
-  return buf->pos <= buf->len;
+int fota_verify_package() {
+  return process_package(PROCESS_MODE_VERIFY);
 }
 
-static buffer_t* aes_decrypt(buffer_t* buf, aes_key_t key) {
-  char tag[4];
-  memcpy(tag, buf_seek(buf, 4), 4);
-
-  if(memcmp(tag, "ENCC", 4)==0) {
-    uint32_t len = buf_read_uint32(buf);
-    uint32_t len_aligned = buf_read_uint32(buf);
-    buf_seek(buf, 4);
-
-    aes_iv_t aes_iv;
-    buf_read(buf, aes_iv, sizeof(aes_iv_t));
-
-    mbedtls_aes_context aes;
-    mbedtls_aes_init(&aes);
-    int err = mbedtls_aes_setkey_dec(&aes, key, AES_KEY_BITSIZE);
-    if(!err) {
-      buffer_t* out_buf = buf_alloc(len_aligned);
-      err = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_DECRYPT, len_aligned, aes_iv, buf_ptr(buf), out_buf->data);
-      mbedtls_aes_free(&aes);
-      if(err) {
-        free(out_buf);
-      }
-      else {
-        out_buf->len = len;
-        return out_buf;
-      }
-    }
-  }
-  return NULL;
-}
-
-buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf) {
-  if(!fwpk_enc2_buf) return NULL;
-
-  buffer_t* fwpk_enc_buf = aes_decrypt(fwpk_enc2_buf, unique_key);
-  if(fwpk_enc_buf) {
-    buffer_t* fwpk_buf = aes_decrypt(fwpk_enc_buf, model_key);
-    free(fwpk_enc_buf);
-
-    if(fwpk_buf && memcmp(fwpk_buf->data, "FWPK", 4)==0) {
-
-      int has_model = 0;
-      buffer_t* firmware_buf = NULL;
-      rsa_sign_t firmware_sign;
-
-      chunk_t chunk;
-      while(next_chunk(fwpk_buf, &chunk)) {
-        if(strcmp(chunk.name, "MODL")==0) {
-          if(strcmp((const char*)chunk.data, model_id)!=0) {
-            #ifdef FOTA_TOOL
-            fprintf(stderr, "bad model id\n");
-            #endif
-            free(fwpk_buf);
-            return NULL;
-          }
-          has_model = 1;
-        }
-        else if(strcmp(chunk.name, "FRMW")==0) {
-          firmware_buf = buf_alloc(chunk.len);
-          buf_write(firmware_buf, chunk.data, chunk.len);
-        }
-        else if(strcmp(chunk.name, "SIGN")==0) {
-          memcpy(firmware_sign, chunk.data, sizeof(rsa_sign_t));
-        }
-      }
-      free(fwpk_buf);
-
-      if(!firmware_buf || !has_model) {
-        #ifdef FOTA_TOOL
-        fprintf(stderr, "file corrupt\n");
-        #endif
-        return NULL;
-      }
-
-      // Create firmware hash
-      sha_hash_t firmware_hash;
-      mbedtls_sha1_ret(firmware_buf->data, firmware_buf->len, firmware_hash);
-
-      // Get the public signing key
-      mbedtls_rsa_context public_key;
-      mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V21, 0);
-      get_public_key(&public_key, RSA_SIGN_KEY_MODULO);
-
-      // Verify signature
-      int valid = !mbedtls_rsa_pkcs1_verify(&public_key, NULL, NULL, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA1, 0, firmware_hash, firmware_sign);
-
-      mbedtls_rsa_free(&public_key);
-
-      if(valid)
-        return firmware_buf;
-    }
-  }
-
-  return NULL;
+int fota_install_package() {
+  return process_package(PROCESS_MODE_INSTALL);
 }

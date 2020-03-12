@@ -26,6 +26,7 @@
 #include <stdint.h>
 
 #define buf_ptr(buf) ((buf)->data + (buf)->pos)
+#define buf_seekto(buf, newpos) ((buf)->pos = newpos)
 #define buf_available(buf) ((buf)->len - (buf)->pos)
 
 typedef struct {
