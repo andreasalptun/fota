@@ -96,7 +96,7 @@ void fotai_generate_random(uint8_t* buf, int len) {
 void fotai_aes_decrypt_init(fota_aes_key_t key, void** ctx) {
   mbedtls_aes_context* aes_ctx = malloc(sizeof(mbedtls_aes_context));
   mbedtls_aes_init(aes_ctx);
-  mbedtls_aes_setkey_dec(aes_ctx, key, AES_KEY_BITSIZE);
+  mbedtls_aes_setkey_dec(aes_ctx, key, FOTA_AES_KEY_BITSIZE);
   *ctx = aes_ctx;
 }
 

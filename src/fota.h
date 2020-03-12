@@ -36,9 +36,9 @@
 
 #define OPENSSL_RSA_PUBLIC_EXPONENT 0x010001
 
-typedef uint8_t fota_token_t[RSA_KEY_BITSIZE/8];
-typedef uint8_t fota_rsa_key_t[RSA_KEY_BITSIZE/8];
-typedef uint8_t fota_aes_key_t[AES_KEY_BITSIZE/8];
+typedef uint8_t fota_token_t[FOTA_RSA_KEY_BITSIZE/8];
+typedef uint8_t fota_rsa_key_t[FOTA_RSA_KEY_BITSIZE/8];
+typedef uint8_t fota_aes_key_t[FOTA_AES_KEY_BITSIZE/8];
 typedef uint8_t fota_aes_iv_t[16];
 typedef uint8_t fota_sha_hash_t[32]; // sha256
 

@@ -49,7 +49,7 @@ typedef struct {
   fota_aes_key_t key;
 } model_key_t;
 
-model_key_t model_keys[] = MODEL_KEYS;
+model_key_t model_keys[] = FOTA_MODEL_KEYS;
 
 extern FILE* g_package_file;
 extern FILE* g_install_file;
@@ -104,7 +104,7 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
   setlocale(LC_NUMERIC, "en_US.UTF-8");
   fprintf(stderr, "Generating unique keys for model %s, please wait...\n", model_id);
 
-  fota_aes_key_t generator_key = GENERATOR_KEY;
+  fota_aes_key_t generator_key = FOTA_GENERATOR_KEY;
 
   fota_aes_key_t auth_data[4];
   memcpy(auth_data[0], generator_key, sizeof(fota_aes_key_t));
@@ -133,7 +133,7 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
 
       mbedtls_sha256_ret((uint8_t*)auth_data, sizeof(auth_data), auth_hash, 0);
 
-      if(memcmp(hash_zero, auth_hash, GENERATOR_DIFFICULTY)==0) {
+      if(memcmp(hash_zero, auth_hash, FOTA_GENERATOR_DIFFICULTY)==0) {
         fprintf(stderr, "Found unique key\n");
         print_array(stdout, auth_data[1], 16);
         print_array(stderr, auth_hash, sizeof(fota_sha_hash_t));
@@ -165,7 +165,7 @@ static buffer_t* encrypt_buffer(buffer_t* buf, fota_aes_key_t key) {
 
   mbedtls_aes_context aes;
   mbedtls_aes_init(&aes);
-  int err = mbedtls_aes_setkey_enc(&aes, key, AES_KEY_BITSIZE);
+  int err = mbedtls_aes_setkey_enc(&aes, key, FOTA_AES_KEY_BITSIZE);
   assert(!err);
   err = mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, buf->len, iv, buf->data, buf_ptr(enc_buf));
   assert(!err);
@@ -200,7 +200,7 @@ static buffer_t* create_fwpk_enc_package(const char* filename, const char* model
   mbedtls_mpi_read_binary(&private_key.N, modulo, sizeof(fota_rsa_key_t));
   mbedtls_mpi_read_string(&private_key.D, 16, FOTA_RSA_SIGN_KEY_PRIVATE_EXPONENT);
   mbedtls_mpi_lset (&private_key.E, OPENSSL_RSA_PUBLIC_EXPONENT);
-  private_key.len = RSA_KEY_BITSIZE/8;
+  private_key.len = FOTA_RSA_KEY_BITSIZE/8;
 
   int err = mbedtls_rsa_complete(&private_key);
   assert(!err);
@@ -210,7 +210,7 @@ static buffer_t* create_fwpk_enc_package(const char* filename, const char* model
   err = mbedtls_sha1_ret(firmware_buf->data, firmware_buf->len, firmware_hash);
   assert(!err);
 
-  // Sign the firmware hash TODO: rng
+  // Sign the firmware hash
   fota_rsa_key_t firmware_sign;
   err = mbedtls_rsa_rsassa_pss_sign(&private_key, generate_random, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA1, 0, firmware_hash, firmware_sign);
   assert(!err);
@@ -324,7 +324,7 @@ int main(int argc, char* argv[]) {
 
           if(!local_mode) {
             printf("Upload at https://console.firebase.google.com/u/0/project/%s/storage/%s.appspot.com/files\n",
-                   FIREBASE_PROJECT, FIREBASE_PROJECT);
+                   FOTA_FIREBASE_PROJECT, FOTA_FIREBASE_PROJECT);
           }
         }
 
@@ -350,7 +350,7 @@ int main(int argc, char* argv[]) {
     }
     *p = '\0';
 
-    const char* url[3] = { "https://europe-west2-", FIREBASE_PROJECT, ".cloudfunctions.net" };
+    const char* url[3] = { "https://europe-west2-", FOTA_FIREBASE_PROJECT, ".cloudfunctions.net" };
     if(local_mode) {
       url[0] = "http://localhost:5001/";
       url[2] = "/europe-west2";

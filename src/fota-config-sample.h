@@ -23,8 +23,6 @@
 #ifndef FOTA_CONFIG_H
 #define FOTA_CONFIG_H
 
-// TODO add FOTA_ prefix
-
 #warning "Sample config! Copy fota-config-sample.h to fota-config.h and use project specific keys"
 
 // System config
@@ -34,23 +32,23 @@
 #define FOTA_INSTALL_PAGE_SIZE 512
 
 // Crypto config
-#define RSA_KEY_BITSIZE 1024
-#define AES_KEY_BITSIZE 128
+#define FOTA_RSA_KEY_BITSIZE 1024
+#define FOTA_AES_KEY_BITSIZE 128
 
 // Models
-#define MODEL_ID_MK1 "mk1"
-#define MODEL_KEY_MK1 {0x51,0x92,0x19,0x26,0x94,0x31,0x50,0x64,0x68,0xc1,0xf8,0x99,0x59,0x5a,0xfe,0x29}
-#define MODEL_KEYS {{MODEL_ID_MK1, MODEL_KEY_MK1}}
+#define FOTA_MODEL_ID_MK1 "mk1"
+#define FOTA_MODEL_KEY_MK1 {0x51,0x92,0x19,0x26,0x94,0x31,0x50,0x64,0x68,0xc1,0xf8,0x99,0x59,0x5a,0xfe,0x29}
+#define FOTA_MODEL_KEYS {{FOTA_MODEL_ID_MK1, FOTA_MODEL_KEY_MK1}}
 
 // Generator key
 #ifdef FOTA_TOOL
-#define GENERATOR_KEY {0x33,0x71,0xae,0x3b,0xdf,0xc3,0x8d,0x0c,0x11,0xd4,0x9e,0x22,0x3a,0x26,0x55,0x47}
-#define GENERATOR_DIFFICULTY 3
+#define FOTA_GENERATOR_KEY {0x33,0x71,0xae,0x3b,0xdf,0xc3,0x8d,0x0c,0x11,0xd4,0x9e,0x22,0x3a,0x26,0x55,0x47}
+#define FOTA_GENERATOR_DIFFICULTY 3
 #endif
 
 // Private key
 #ifdef FOTA_TOOL
-#define RSA_SIGN_KEY_PRIVATE_EXP "9f51ad7f33b3f57b857e8f9bfc2aa803160fa2e96e756b61b83f75cc49dd1023cf07305f111fa31e9f1671cce64d699a66c5de9e56c8014d7dd9b65604cc86e7e7388ea0623fe9911a38bdd448e86fe061dc67f5a8dbeda8f14af50c845fd254c03167379a8ccc9c43365e992dbe8af1e3ec34e8c8a502312395ffe2ce273a21"
+#define FOTA_RSA_SIGN_KEY_PRIVATE_EXPONENT "9f51ad7f33b3f57b857e8f9bfc2aa803160fa2e96e756b61b83f75cc49dd1023cf07305f111fa31e9f1671cce64d699a66c5de9e56c8014d7dd9b65604cc86e7e7388ea0623fe9911a38bdd448e86fe061dc67f5a8dbeda8f14af50c845fd254c03167379a8ccc9c43365e992dbe8af1e3ec34e8c8a502312395ffe2ce273a21"
 #endif
 
 // NOTE:
@@ -58,7 +56,7 @@
 
 // Firebase project
 #ifdef FOTA_TOOL
-#define FIREBASE_PROJECT "xxx-fota"
+#define FOTA_FIREBASE_PROJECT "xxx-fota"
 #endif
 
 #endif //FOTA_CONFIG_H

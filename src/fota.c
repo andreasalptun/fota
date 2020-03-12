@@ -38,10 +38,9 @@ typedef struct {
   uint32_t len;
 } aes_decrypt_t;
 
-// TODO model key -> revision key/version key (search for vehicle)
 // The model key is shared among systems of same revision and should reside in the code segment
-static const char* model_id = MODEL_ID_MK1;
-static fota_aes_key_t model_key = MODEL_KEY_MK1;
+static const char* model_id = FOTA_MODEL_ID_MK1;
+static fota_aes_key_t model_key = FOTA_MODEL_KEY_MK1;
 
 // Static functions
 //
@@ -61,7 +60,7 @@ static void get_public_key(mbedtls_rsa_context* key, int type) {
 
   mbedtls_mpi_read_binary(&key->N, public_key_mod, sizeof(fota_rsa_key_t));
   mbedtls_mpi_lset (&key->E, OPENSSL_RSA_PUBLIC_EXPONENT);
-  key->len = RSA_KEY_BITSIZE/8;
+  key->len = FOTA_RSA_KEY_BITSIZE/8;
 }
 
 static void read_storage_page(uint8_t* buf, int page, aes_decrypt_t* decrypt_unique, aes_decrypt_t* decrypt_model) {

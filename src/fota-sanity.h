@@ -28,15 +28,15 @@
 #error FOTA_INSTALL_PAGE_SIZE must be power of two
 #endif
 
-#if (RSA_KEY_BITSIZE&(RSA_KEY_BITSIZE-1))!=0
-#error RSA_KEY_BITSIZE must be power of two
+#if (FOTA_RSA_KEY_BITSIZE&(FOTA_RSA_KEY_BITSIZE-1))!=0
+#error FOTA_RSA_KEY_BITSIZE must be power of two
 #endif
 
-#if (AES_KEY_BITSIZE&(AES_KEY_BITSIZE-1))!=0
-#error AES_KEY_BITSIZE must be power of two
+#if (FOTA_AES_KEY_BITSIZE&(FOTA_AES_KEY_BITSIZE-1))!=0
+#error FOTA_AES_KEY_BITSIZE must be power of two
 #endif
 
-#if RSA_KEY_BITSIZE/8-42 < 2*AES_KEY_BITSIZE/8
+#if FOTA_RSA_KEY_BITSIZE/8-42 < 2*FOTA_AES_KEY_BITSIZE/8
 #error RSA key too small or AES key too big (two AES keys must fit in RSA-OAEP encryption)
 #endif
 
@@ -48,6 +48,6 @@
 #error FOTA_INSTALL_PAGE_SIZE must be larger or equal to FOTA_STORAGE_PAGE_SIZE
 #endif
 
-#if FOTA_STORAGE_PAGE_SIZE < RSA_KEY_BITSIZE/8
+#if FOTA_STORAGE_PAGE_SIZE < FOTA_RSA_KEY_BITSIZE/8
 #error FOTA_STORAGE_PAGE_SIZE must fit the RSA signature
 #endif

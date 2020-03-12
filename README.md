@@ -1,11 +1,10 @@
 # FOTA - Firmware signing and encryption for over-the-air transfer
 
-FOTA is a lightweight (<50kb) signing and encryption tool/library for embedded systems written in pure c. 
+FOTA is a lightweight (&lt;50kb) signing and encryption tool/library for embedded systems written in pure c. 
 
 No networking or bootloader in included, making it suitable for most platforms. The general idea is to let a smartphone ask the system for a request token, use it to download an encrypted firmware package and then transfer the package to the system over bluetooth (or similar). The system itself will then decrypt and verify the firmware, before installing it, making sure no secret keys ever leaves the system.
 
-FOTA is licensed under the MIT license. It uses the ARM mbed-crypto for cryptographic functions (https://github.com/ARMmbed/mbed-crypto), which is licensed under the Apache-2.0 license.
-
+FOTA is licensed under the MIT license. It uses the ARM mbed-crypto for cryptographic functions (<https://github.com/ARMmbed/mbed-crypto>), which is licensed under the Apache-2.0 license.
 
 ## Build the fota-tool
 
@@ -14,7 +13,6 @@ Make sure all submodules are cloned: `git submodule update --init --recursive`
 Run `./build` in project root to build the `fota-tool`
 
 Samples keys are used by default. Always create your own keys before using this in production, see the generate keys sections below.
-
 
 ## Create a firmware package
 
@@ -25,7 +23,6 @@ The output is a file called `<model>.fwpk.enc`, which is signed using RSA-PSS an
 This file can be uploaded to your server of choice. Google Firebase storage is used here as an example, with code written in Nodejs.
 
 To test locally, copy the package hex (printed to stdout) to `fwpkEnc` buffer in `firebase/functions/index.js`. Make sure firebase emulator is running, see _Firebase_ section below.
-
 
 ## Get a request token
 
@@ -39,11 +36,9 @@ The request token is simply the model key concatenated with the unique key, whic
 
 The private encryption key is only known to the server, the model key must match and the unique key must be valid (see section _Generate unique keys_ below). This makes it impossible to create a token for a unit without having direct access to the data stored on that particular unit (in code segment and flash storage).
 
-
 ## Unique key encryption layer
 
 When the server gets a request with a valid token, it uses the unique key to add an extra layer of AES-128-CBC encryption before responding. This makes the downloaded firmware package unique for that particular unit and verification will fail on any other unit.
-
 
 ## Verify the firmware package
 
@@ -52,7 +47,6 @@ Use `fota-tool -v <model>.fwpk.enc2` to verify the downloaded firmware package.
 On system, the downloaded firmware package must be verified and unwrapped before being installed. This is done using the `buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf);` function. The `buffer_t` is simply an allocated byte buffer with a length and a read/write position, see `buffer.h`. It should be free'd after use.
 
 The downloaded package (`<model>.fwpk.enc2`) is decrypted in two iterations, first using the unique key and then using the model key. The model identifier is matched and the signature is verified with the public signing key using RSA-PSS. If the function returns null, validation failed.
-
 
 ## Generate unique keys
 
@@ -63,7 +57,6 @@ The unique key can easily be validated on the server without the need for a data
 `SHA256(generatorKey + uniqueKey + modelKey + generatorKey) = 000000HEXHASH`
 
 The number of leading zeros is the `generatorDifficulty` = the security level of the key. The generatorKey is only known by the tool (generation) and the server (validation), making it virtually impossible to come up with a unique key that poses the leading zeros property without knowing the generation key.
-
 
 ## Generate RSA keys
 
@@ -84,13 +77,11 @@ Convert the hex into binary
 Store the data in this file in a suitable memory location, preferably an external flash memory.
 
 For testing purposes, the binary can be converted to a c-include
-
 `xxd -i private.bin private.h`
 
 Copy the private exponent from the `private.txt` file to `fota-config.h` and reformat it into a hex string.
 
 Copy the private encryption key pem to firebase/functions/index.js. Note: the private key should not be stored in clear text like in the example.
-
 
 ## Generate model and generator keys
 
@@ -100,12 +91,11 @@ Generate random keys for the model key and the generator key using
 
 Copy these random keys to `fota-config.h` and `firebase/function/index.js`
 
-
 ## Firebase
 
 Google Firebase storage is used to store the encrypted firmware package and Firebase functions is used to add an extra layer of encryption to the downloaded firmware package.
 
-See https://firebase.google.com/docs/functions
+See <https://firebase.google.com/docs/functions>
 
 Deploy
 
