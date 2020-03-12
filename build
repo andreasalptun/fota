@@ -9,8 +9,7 @@ then
   CFLAGS="$CFLAGS $CDEBUGFLAGS"
 fi
 
-SRC="src/fota.c \
-  src/fota-integration.c"
+SRC="src/fota.c"
 
 LIB="mbed-crypto/library/rsa.c \
   mbed-crypto/library/bignum.c \
@@ -28,7 +27,7 @@ then
   OUTPUT=fota-client 
 else
   echo "Building fota tool $2"
-  SRC="$SRC src/buffer.c src/fota-tool.c"
+  SRC="$SRC src/buffer.c src/fota-tool.c src/fota-integration.c"
   LIB="$LIB mbed-crypto/library/sha256.c"
   CFLAGS="-DFOTA_TOOL $CFLAGS"
   if [ "$2" = "release" ]
