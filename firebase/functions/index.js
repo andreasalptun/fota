@@ -55,6 +55,8 @@ const modelKeys = {
   'mk1': Buffer.from('519219269431506468c1f899595afe29', 'hex'),
 };
 
+const storagePageSize = 256;
+
 // const fwpkEnc = Buffer.from('454e4343bf000000c000000000000000cadf4271948f67b726e39d47804dc5ced632ea3e4bd6f8a41d9ecabbcd84082ee7a88a5a779701cc00f7ee1ca0a9cd94533d9c82fbad72fa3f1ee18596cffd0b9a5d200636d8ec2d276b7c357d0a97fab28262e027980526c877847e5935c0e6b358670f244775d1cbbdf1506772bf16904ebb918089df40a296ab871690e3211c28ced0a0389395db7f72e04e68fc08692b1cf8af09eb709fd1457104b8743a16aa5f3aff5b4ab63a4f7ac2489327d24fdef87208673687aec291524c46259730b3d3fc0f5702eef8bc0487de8545bd', 'hex');
 let fwpkEnc = null;
 
@@ -76,9 +78,6 @@ exports.firmware = functions
           .digest();
 
         if (Buffer.alloc(generatorDifficulty).compare(authHash, 0, generatorDifficulty) == 0) {
-          const iv = crypto.randomBytes(16);
-          const cipher = crypto.createCipheriv('aes-128-cbc', uniqueKey, iv);
-
           try {
             if (!fwpkEnc) {
               let res = await storage
@@ -88,18 +87,20 @@ exports.firmware = functions
               fwpkEnc = res[0];
             }
 
-            const padding = Buffer.alloc(16 - (fwpkEnc.length & 0xf));
-            let fwpkEnc2 = cipher.update(Buffer.concat([fwpkEnc, padding]));
-            cipher.final();
+            const iv = crypto.randomBytes(16);
+            const cipher = crypto.createCipheriv('aes-128-cbc', uniqueKey, iv);
+            
+            const fwpkEncEncrypted = Buffer.concat([cipher.update(fwpkEnc), cipher.final()]);
 
-            const header = Buffer.alloc(16);
-            header.write("ENCC");
-            header.writeUInt32LE(fwpkEnc.length, 4);
-            header.writeUInt32LE(fwpkEnc.length + padding.length, 8);
-            header.writeUInt32LE(0, 12);
-
+            const fwpkEnc2 = Buffer.alloc(storagePageSize + fwpkEncEncrypted.length);
+            fwpkEnc2.write("ENCC");
+            fwpkEnc2.writeUInt32LE(fwpkEnc.length, 4);
+            
+            iv.copy(fwpkEnc2, 16);
+            fwpkEncEncrypted.copy(fwpkEnc2, storagePageSize);
+            
             res.set('content-type', 'application/octet-stream')
-            res.send(Buffer.concat([header, iv, fwpkEnc2]));
+            res.send(fwpkEnc2);
 
             return;
           } catch (e) {
