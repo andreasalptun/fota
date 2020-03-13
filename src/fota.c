@@ -237,10 +237,10 @@ int fota_request_token(fota_token_t token) {
   return !err;
 }
 
-int fota_verify_package() {
+int fota_verify_package(void) {
   return process_package(PROCESS_MODE_VERIFY);
 }
 
-int fota_install_package() {
+int fota_install_package(void) {
   return process_package(PROCESS_MODE_INSTALL);
 }

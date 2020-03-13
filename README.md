@@ -4,7 +4,9 @@ FOTA is a lightweight (&lt;50kb) signing and encryption tool/library for embedde
 
 No networking or bootloader in included, making it suitable for most platforms. The general idea is to let a smartphone ask the system for a request token, use it to download an encrypted firmware package and then transfer the package to the system over bluetooth (or similar). The system itself will then decrypt and verify the firmware, before installing it, making sure no secret keys ever leaves the system.
 
-FOTA is licensed under the MIT license. It uses the ARM mbed-crypto for cryptographic functions (<https://github.com/ARMmbed/mbed-crypto>), which is licensed under the Apache-2.0 license.
+FOTA is licensed under the MIT license. It depends on the ARM mbed-crypto for cryptographic functions (<https://github.com/ARMmbed/mbed-crypto>), which is licensed under the Apache-2.0 license.
+
+The FOTA client doesn't allocate any data itself, only stack memory is used. The mbed-crypto library does allocate some memory on the heap, but uses a small RAM footprint.
 
 ## Build the fota-tool
 
@@ -22,15 +24,15 @@ The output is a file called `<model>.fwpk.enc`, which is signed using RSA-PSS an
 
 This file can be uploaded to your server of choice. Google Firebase storage is used here as an example, with code written in Nodejs.
 
-To test locally, copy the package hex (printed to stdout) to `fwpkEnc` buffer in `firebase/functions/index.js`. Make sure firebase emulator is running, see _Firebase_ section below.
+To test locally, copy the package hex (printed to stdout if uncommented in fota-tool main) to `fwpkEnc` buffer in `firebase/functions/index.js`. Make sure firebase emulator is running, see _Firebase_ section below.
 
 ## Get a request token
 
-A request token is a hex string used to fetch the encrypted firmware package from the server. It's length will depend on the RSA key size; a 1024 bit key will generate 256 char hex string.
+A request token is a hex string used to fetch the encrypted firmware package from the server. It's length will depend on the RSA key size; a 1024 bit key will generate 128 byte token. 
 
 Use `fota-tool -r` to get a request token for testing. Copy and run the curl command printed to download the firmware package. Add the `-l` flag when testing locally.
 
-On system, the request token is generated using the `char* fota_request_token();` function. The return value should be free'd. 
+On system, the request token is generated using the `int fota_request_token(fota_token_t token)` function. It must be encoded to hex before used in the server request query string.
 
 The request token is simply the model key concatenated with the unique key, which is then encrypted with the public encryption key using RSA-OAEP. The data is short enough to be encrypted directly without the need for an intermediary AES key, assuming the RSA key is at least 1024 bits.
 
@@ -44,7 +46,7 @@ When the server gets a request with a valid token, it uses the unique key to add
 
 Use `fota-tool -v <model>.fwpk.enc2` to verify the downloaded firmware package.
 
-On system, the downloaded firmware package must be verified and unwrapped before being installed. This is done using the `buffer_t* fota_verify_package(buffer_t* fwpk_enc2_buf);` function. The `buffer_t` is simply an allocated byte buffer with a length and a read/write position, see `buffer.h`. It should be free'd after use.
+On system, the downloaded firmware package must be verified and unwrapped before being installed. This is done using the `int fota_verify_package(void)` function. After successful verification, the firmware can be installed using the function `int fota_install_package(void)`. For more information, see the API and integration section below.
 
 The downloaded package (`<model>.fwpk.enc2`) is decrypted in two iterations, first using the unique key and then using the model key. The model identifier is matched and the signature is verified with the public signing key using RSA-PSS. If the function returns null, validation failed.
 
@@ -91,6 +93,91 @@ Generate random keys for the model key and the generator key using
 
 Copy these random keys to `fota-config.h` and `firebase/function/index.js`
 
+## API & Integration
+
+```c
+// Definitions
+//
+
+#define FOTA_PUBLIC_KEY_TYPE_SIGNING    0
+#define FOTA_PUBLIC_KEY_TYPE_ENCRYPTION 1
+
+typedef uint8_t fota_token_t[FOTA_RSA_KEY_BITSIZE/8];
+typedef uint8_t fota_rsa_key_t[FOTA_RSA_KEY_BITSIZE/8];
+typedef uint8_t fota_aes_key_t[FOTA_AES_KEY_BITSIZE/8];
+typedef uint8_t fota_aes_iv_t[16];
+
+
+// FOTA API
+//
+
+// Returns a static model id string, do not free
+const char* fota_model_id(void);
+
+// Generates a request token for downloading the firmware package from server.
+// The generated token in placed in the fota_token_t buffer.
+// Returns 1 if the request token was successfully generated.
+int fota_request_token(fota_token_t token);
+
+// Decrypt and verify package signature.
+// Uses fotai_read_storage_page to read pages from the memory where the downloaded
+// firmware package is stored. Uses fotai_aes_* for AES decryption.
+// No data is modified during this process.
+// Returns 1 if the firmware signature is valid.
+int fota_verify_package(void);
+
+// Decrypt and install the package.
+// Uses fotai_read_storage_page to read pages from the memory where the downloaded
+// firmware package is stored. Uses fotai_aes_* for AES decryption.
+// Uses fotai_write_firmware_page to write pages to destination firmware flash memory.
+// This function does not check the signature. Call fota_verify_package and
+// check the result before installing.
+// Returns 1 if the firmware was installed successfully.
+int fota_install_package(void);
+
+
+// FOTA integration functions, must be supplied by the system. Example integration in fota-integration.c
+//
+
+// Read a single memory page from where the downloaded firmware package is stored,
+// usually an external flash chip. The size of a page is defined by FOTA_STORAGE_PAGE_SIZE
+// and the provided buffer will be large enough to fit a page. Page 0 is expected to be
+// the first page of the firmware package, starting at byte 0.
+extern void fotai_read_storage_page(uint8_t* buf, int page);
+
+// Write a single memory page to where the firmware is stored, usually the internal
+// flash memory. The size of a page is defined by FOTA_INSTALL_PAGE_SIZE. Page 0 is
+// the first page of the decrypted firmware, starting at byte 0. The len parameter
+// is FOTA_INSTALL_PAGE_SIZE except for the last written page, where it might be less.
+extern void fotai_write_firmware_page(uint8_t* buf, int page, int len); // TODO perhaps these functions should return something?
+
+// Read the unique key from flash memory into the provided buffer.
+extern void fotai_get_unique_key(fota_aes_key_t unique_key);
+
+// Read a public key (rsa key modulo) from flash memory into the provided buffer.
+// The type parameter is either FOTA_PUBLIC_KEY_TYPE_SIGNING or FOTA_PUBLIC_KEY_TYPE_ENCRYPTION.
+extern void fotai_get_public_key(fota_rsa_key_t public_key, int type);
+
+// Generate len random bytes into the provided buffer.
+extern void fotai_generate_random(uint8_t* buf, int len);
+
+// Initialize AES-128-CBC decryption with the provided decryption key. If the decryption
+// requires a context it can be set by dereferencing ctx and setting it as a void pointer.
+extern void fotai_aes_decrypt_init(fota_aes_key_t key, void** ctx);
+
+// Decrypt a block of size len bytes from in to out, using the provided initialization
+// vector. The initialization vector will be modified in each call, allowing this function
+// to be called multiple times for consecutive blocks. The block len is a multiple of
+// of 16 bytes. If a context is provided in the init function, it will be accessible
+// by the ctx pointer.
+extern void fotai_aes_decrypt_block(uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx);
+
+// Releases memory allocated by the init function, if necessary. If a context is provided
+// in the init function, it will be accessible by the ctx pointer.
+extern void fotai_aes_decrypt_free(void* ctx);
+
+```
+
 ## Firebase
 
 Google Firebase storage is used to store the encrypted firmware package and Firebase functions is used to add an extra layer of encryption to the downloaded firmware package.
@@ -105,8 +192,7 @@ Run locally (use the `-l` flag when requesting key)
 
 `firebase emulators:start`
 
-
 ## TODO
 
-- Improve random number generators
-- Proper AES padding (https://en.wikipedia.org/wiki/Padding_(cryptography)#PKCS#5_and_PKCS#7
+-   Proper AES padding (<https://en.wikipedia.org/wiki/Padding_(cryptography)#PKCS#5_and_PKCS#7>
+-   Change to sha256

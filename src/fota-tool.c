@@ -301,7 +301,8 @@ int main(int argc, char* argv[]) {
       buffer_t* fwpk_enc_buf = create_fwpk_enc_package(filename, model_id);
 
       if(fwpk_enc_buf) {
-        // buf_print("fwpk.enc", fwpk_enc_buf);
+        // Uncomment the following line to print the fwpk.enc data in hex format
+        buf_print("fwpk.enc", fwpk_enc_buf);
 
         char* filename_out = malloc(strlen(model_id) + 16);
         strcpy(filename_out, model_id);
