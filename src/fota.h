@@ -93,7 +93,8 @@ extern void fotai_get_unique_key(fota_aes_key_t unique_key);
 // The type parameter is either FOTA_PUBLIC_KEY_TYPE_SIGNING or FOTA_PUBLIC_KEY_TYPE_ENCRYPTION.
 extern void fotai_get_public_key(fota_rsa_key_t public_key, int type);
 
-// Generate len random bytes into the provided buffer.
+// Generate len random bytes into the provided buffer. On system the random bytes are
+// used for RSA-OAEP padding generation and should preferably be cryptography secure.
 extern void fotai_generate_random(uint8_t* buf, int len);
 
 // Initialize AES-128-CBC decryption with the provided decryption key. If the decryption
@@ -104,11 +105,11 @@ extern void fotai_aes_decrypt_init(fota_aes_key_t key, void** ctx);
 // vector. The initialization vector will be modified in each call, allowing this function
 // to be called multiple times for consecutive blocks. The block len is a multiple of
 // of 16 bytes. If a context is provided in the init function, it will be accessible
-// by the ctx pointer.
+// from the ctx pointer.
 extern void fotai_aes_decrypt_block(uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx);
 
 // Releases memory allocated by the init function, if necessary. If a context is provided
-// in the init function, it will be accessible by the ctx pointer.
+// in the init function, it will be accessible from the ctx pointer.
 extern void fotai_aes_decrypt_free(void* ctx);
 
 #endif //FOTA_H

@@ -48,17 +48,17 @@ Use `fota-tool -v <model>.fwpk.enc2` to verify the downloaded firmware package.
 
 On system, the downloaded firmware package must be verified and unwrapped before being installed. This is done using the `int fota_verify_package(void)` function. After successful verification, the firmware can be installed using the function `int fota_install_package(void)`. For more information, see the API and integration section below.
 
-The downloaded package (`<model>.fwpk.enc2`) is decrypted in two iterations, first using the unique key and then using the model key. The model identifier is matched and the signature is verified with the public signing key using RSA-PSS. If the function returns null, validation failed.
+The downloaded package (`<model>.fwpk.enc2`) is decrypted in two iterations, first using the unique key and then using the model key. The model identifier is matched and the signature is verified with the public signing key using RSA-PSS.
 
 ## Generate unique keys
 
-Each shipped unit must have a unique key. Unique keys are easily generated using `fota-tool -m<model> -g<num-keys>` where _model_ is a string different for each platform (if applicable). Use model `mk1` for testing. 
+Each shipped unit must have a unique key. Unique keys are easily generated using `fota-tool -m<model> -g<num-keys>` where _model_ is a string matching the platform. Use model `mk1` for testing. 
 
 The unique key can easily be validated on the server without the need for a database, because of its _leading-sha-zeros_ property:
 
 `SHA256(generatorKey + uniqueKey + modelKey + generatorKey) = 000000HEXHASH`
 
-The number of leading zeros is the `generatorDifficulty` = the security level of the key. The generatorKey is only known by the tool (generation) and the server (validation), making it virtually impossible to come up with a unique key that poses the leading zeros property without knowing the generation key.
+The number of leading zeros is the `generatorDifficulty` = the security level of the key. The generatorKey is only known to the tool (for generation) and to the server (for validation), making it virtually impossible to come up with a unique key that poses the leading zeros property, without knowing the generation key.
 
 ## Generate RSA keys
 
@@ -149,7 +149,7 @@ extern void fotai_read_storage_page(uint8_t* buf, int page);
 // flash memory. The size of a page is defined by FOTA_INSTALL_PAGE_SIZE. Page 0 is
 // the first page of the decrypted firmware, starting at byte 0. The len parameter
 // is FOTA_INSTALL_PAGE_SIZE except for the last written page, where it might be less.
-extern void fotai_write_firmware_page(uint8_t* buf, int page, int len); // TODO perhaps these functions should return something?
+extern void fotai_write_firmware_page(uint8_t* buf, int page, int len);
 
 // Read the unique key from flash memory into the provided buffer.
 extern void fotai_get_unique_key(fota_aes_key_t unique_key);
@@ -158,7 +158,8 @@ extern void fotai_get_unique_key(fota_aes_key_t unique_key);
 // The type parameter is either FOTA_PUBLIC_KEY_TYPE_SIGNING or FOTA_PUBLIC_KEY_TYPE_ENCRYPTION.
 extern void fotai_get_public_key(fota_rsa_key_t public_key, int type);
 
-// Generate len random bytes into the provided buffer.
+// Generate len random bytes into the provided buffer. On system the random bytes are
+// used for RSA-OAEP padding generation and should preferably be cryptography secure.
 extern void fotai_generate_random(uint8_t* buf, int len);
 
 // Initialize AES-128-CBC decryption with the provided decryption key. If the decryption
@@ -169,11 +170,11 @@ extern void fotai_aes_decrypt_init(fota_aes_key_t key, void** ctx);
 // vector. The initialization vector will be modified in each call, allowing this function
 // to be called multiple times for consecutive blocks. The block len is a multiple of
 // of 16 bytes. If a context is provided in the init function, it will be accessible
-// by the ctx pointer.
+// from the ctx pointer.
 extern void fotai_aes_decrypt_block(uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx);
 
 // Releases memory allocated by the init function, if necessary. If a context is provided
-// in the init function, it will be accessible by the ctx pointer.
+// in the init function, it will be accessible from the ctx pointer.
 extern void fotai_aes_decrypt_free(void* ctx);
 
 ```
