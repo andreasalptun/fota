@@ -94,7 +94,7 @@ extern void fotai_get_unique_key(fota_aes_key_t unique_key);
 extern void fotai_get_public_key(fota_rsa_key_t public_key, int type);
 
 // Generate len random bytes into the provided buffer. On system the random bytes are
-// used for RSA-OAEP padding generation and should preferably be cryptography secure.
+// used for RSA-OAEP padding generation and should preferably be cryptographically secure.
 extern void fotai_generate_random(uint8_t* buf, int len);
 
 // Initialize AES-128-CBC decryption with the provided decryption key. If the decryption
