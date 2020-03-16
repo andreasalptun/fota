@@ -22,6 +22,7 @@
 
 const functions = require('firebase-functions');
 const crypto = require('crypto');
+const unpad_oaep_sha256 = require('./unpad_oaep_sha256');
 const {
   Storage
 } = require('@google-cloud/storage');
@@ -67,12 +68,11 @@ exports.firmware = functions
     const AES_KEY_LEN = 16;
     if (req.query.model && req.query.token && modelKeys[req.query.model]) {
 
-      const token = crypto.privateDecrypt({
+      const token = unpad_oaep_sha256(crypto.privateDecrypt({
         key: privateEncrKey,
-        oaepHash: 'sha256',
-        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING
-      }, Buffer.from(req.query.token, 'hex'));
-      
+        padding: crypto.constants.RSA_NO_PADDING
+      }, Buffer.from(req.query.token, 'hex')));
+
       const modelKey = modelKeys[req.query.model];
       if (modelKey.compare(token, 0, AES_KEY_LEN) == 0) {
         const uniqueKey = token.slice(AES_KEY_LEN, 2 * AES_KEY_LEN);
