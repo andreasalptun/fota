@@ -9,10 +9,7 @@
 #define MBEDTLS_PKCS1_V21
 
 // SHA
-#define MBEDTLS_SHA1_C
-#ifdef FOTA_TOOL
-#define MBEDTLS_SHA256_C // For unique key generation
-#endif
+#define MBEDTLS_SHA256_C
 
 // AES-CBC
 #define MBEDTLS_AES_C

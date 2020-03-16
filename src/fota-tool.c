@@ -32,7 +32,6 @@
 
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha256.h"
-#include "mbedtls/sha1.h"
 #include "mbedtls/aes.h"
 
 #define ACTION_NONE             0
@@ -192,7 +191,7 @@ static buffer_t* create_fwpk_enc_package(const char* filename, const char* model
 
   // Import private signing key
   mbedtls_rsa_context private_key;
-  mbedtls_rsa_init(&private_key, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
+  mbedtls_rsa_init(&private_key, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA256);
 
   fota_rsa_key_t modulo;
   fotai_get_public_key(modulo, FOTA_PUBLIC_KEY_TYPE_SIGNING);
@@ -207,12 +206,12 @@ static buffer_t* create_fwpk_enc_package(const char* filename, const char* model
 
   // Create firmware hash
   fota_sha_hash_t firmware_hash;
-  err = mbedtls_sha1_ret(firmware_buf->data, firmware_buf->len, firmware_hash);
+  err = mbedtls_sha256_ret(firmware_buf->data, firmware_buf->len, firmware_hash, 0);
   assert(!err);
 
   // Sign the firmware hash
   fota_rsa_key_t firmware_sign;
-  err = mbedtls_rsa_rsassa_pss_sign(&private_key, generate_random, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA1, 0, firmware_hash, firmware_sign);
+  err = mbedtls_rsa_rsassa_pss_sign(&private_key, generate_random, NULL, MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256, 0, firmware_hash, firmware_sign);
   assert(!err);
 
   mbedtls_rsa_free(&private_key);
@@ -302,7 +301,7 @@ int main(int argc, char* argv[]) {
 
       if(fwpk_enc_buf) {
         // Uncomment the following line to print the fwpk.enc data in hex format
-        buf_print("fwpk.enc", fwpk_enc_buf);
+        // buf_print("fwpk.enc", fwpk_enc_buf);
 
         char* filename_out = malloc(strlen(model_id) + 16);
         strcpy(filename_out, model_id);

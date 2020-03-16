@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "mbedtls/rsa.h"
-#include "mbedtls/sha1.h"
+#include "mbedtls/sha256.h"
 #include "fota.h"
 
 #define PROCESS_MODE_VERIFY 0
@@ -158,14 +158,14 @@ static int process_package(int mode) {
         res = 1;
       }
       else {
-        mbedtls_sha1_context sha_ctx;
+        mbedtls_sha256_context sha_ctx;
         fota_rsa_key_t firmware_sign;
         fota_sha_hash_t firmware_hash;
 
         memcpy(firmware_sign, storage_page, sizeof(fota_rsa_key_t));
 
-        mbedtls_sha1_init(&sha_ctx);
-        mbedtls_sha1_starts_ret(&sha_ctx);
+        mbedtls_sha256_init(&sha_ctx);
+        mbedtls_sha256_starts_ret(&sha_ctx, 0);
 
         int page = 4;
         int remaining = firmware_len;
@@ -176,14 +176,14 @@ static int process_package(int mode) {
 
           int n = min(FOTA_STORAGE_PAGE_SIZE, remaining);
 
-          mbedtls_sha1_update_ret(&sha_ctx, storage_page, n);
+          mbedtls_sha256_update_ret(&sha_ctx, storage_page, n);
 
           remaining -= n;
           page++;
         }
 
-        mbedtls_sha1_finish(&sha_ctx, firmware_hash);
-        mbedtls_sha1_free(&sha_ctx);
+        mbedtls_sha256_finish(&sha_ctx, firmware_hash);
+        mbedtls_sha256_free(&sha_ctx);
 
         // Get the public signing key
         mbedtls_rsa_context public_key;
@@ -191,7 +191,7 @@ static int process_package(int mode) {
         get_public_key(&public_key, FOTA_PUBLIC_KEY_TYPE_SIGNING);
 
         // Verify signature
-        res = !mbedtls_rsa_pkcs1_verify(&public_key, NULL, NULL, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA1, 0, firmware_hash, firmware_sign);
+        res = !mbedtls_rsa_pkcs1_verify(&public_key, NULL, NULL, MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256, 0, firmware_hash, firmware_sign);
         mbedtls_rsa_free(&public_key);
       }
     }
@@ -231,7 +231,7 @@ int fota_request_token(fota_token_t token) {
 
   // Get the public encryption key
   mbedtls_rsa_context public_key;
-  mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
+  mbedtls_rsa_init(&public_key, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA256);
   get_public_key(&public_key, FOTA_PUBLIC_KEY_TYPE_ENCRYPTION);
 
   // Encrypt buffer

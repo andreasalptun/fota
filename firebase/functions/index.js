@@ -66,10 +66,16 @@ exports.firmware = functions
   .onRequest(async (req, res) => {
     const AES_KEY_LEN = 16;
     if (req.query.model && req.query.token && modelKeys[req.query.model]) {
-      const token = crypto.privateDecrypt(privateEncrKey, Buffer.from(req.query.token, 'hex'));
+
+      const token = crypto.privateDecrypt({
+        key: privateEncrKey,
+        oaepHash: 'sha256',
+        padding: crypto.constants.RSA_PKCS1_OAEP_PADDING
+      }, Buffer.from(req.query.token, 'hex'));
+      
       const modelKey = modelKeys[req.query.model];
       if (modelKey.compare(token, 0, AES_KEY_LEN) == 0) {
-        const uniqueKey = token.slice(AES_KEY_LEN, 2*AES_KEY_LEN);
+        const uniqueKey = token.slice(AES_KEY_LEN, 2 * AES_KEY_LEN);
 
         // Authenticate unique key
         const authHash = crypto
@@ -78,13 +84,13 @@ exports.firmware = functions
           .digest();
 
         if (Buffer.alloc(generatorDifficulty).compare(authHash, 0, generatorDifficulty) == 0) {
-          
+
           // Get aux data
-          const auxData = token.slice(2*AES_KEY_LEN);
-          
+          const auxData = token.slice(2 * AES_KEY_LEN);
+
           // TODO use aux data
           //console.log(auxData.toString());
-          
+
           try {
             if (!fwpkEnc) {
               let res = await storage
@@ -96,16 +102,16 @@ exports.firmware = functions
 
             const iv = crypto.randomBytes(16);
             const cipher = crypto.createCipheriv('aes-128-cbc', uniqueKey, iv);
-            
+
             const fwpkEncEncrypted = Buffer.concat([cipher.update(fwpkEnc), cipher.final()]);
 
             const fwpkEnc2 = Buffer.alloc(storagePageSize + fwpkEncEncrypted.length);
             fwpkEnc2.write("ENCC");
             fwpkEnc2.writeUInt32LE(fwpkEnc.length, 4);
-            
+
             iv.copy(fwpkEnc2, 16);
             fwpkEncEncrypted.copy(fwpkEnc2, storagePageSize);
-            
+
             res.set('content-type', 'application/octet-stream')
             res.send(fwpkEnc2);
 
@@ -114,7 +120,7 @@ exports.firmware = functions
             console.error(e.message);
             res.sendStatus(
               e.response &&
-              typeof(e.response.statusCode) === 'number' && 
+              typeof(e.response.statusCode) === 'number' &&
               e.response.statusCode || 500);
             return;
           }

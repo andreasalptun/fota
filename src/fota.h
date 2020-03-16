@@ -29,7 +29,7 @@
 #include "fota-config-sample.h"
 #endif
 
-#define FOTA_SHA_HASH_BITSIZE 160
+#define FOTA_SHA_HASH_BITSIZE 256
 
 #include "fota-sanity.h"
 #include <stdint.h>

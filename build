@@ -16,7 +16,7 @@ LIB="mbed-crypto/library/rsa.c \
   mbed-crypto/library/md.c \
   mbed-crypto/library/platform_util.c \
   mbed-crypto/library/rsa_internal.c \
-  mbed-crypto/library/sha1.c \
+  mbed-crypto/library/sha256.c \
   mbed-crypto/library/aes.c"
 
 if [ "$1" = "client" ] || [ "$1" = "client-stripped" ]
@@ -28,7 +28,6 @@ then
 else
   echo "Building fota tool $2"
   SRC="$SRC src/buffer.c src/fota-tool.c src/fota-integration.c"
-  LIB="$LIB mbed-crypto/library/sha256.c"
   CFLAGS="-DFOTA_TOOL $CFLAGS"
   if [ "$2" = "release" ]
   then
