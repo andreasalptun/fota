@@ -158,6 +158,11 @@ extern void fotai_get_unique_key(fota_aes_key_t unique_key);
 // The type parameter is either FOTA_PUBLIC_KEY_TYPE_SIGNING or FOTA_PUBLIC_KEY_TYPE_ENCRYPTION.
 extern void fotai_get_public_key(fota_rsa_key_t public_key, int type);
 
+// Append auxillary data to the token, which will be encrypted together with the keys
+// using RSA-OAEP. This can be any data needed on the server, for example a serial number
+// or other device info. The length depends on the size of the RSA key.
+extern void fotai_get_aux_request_data(uint8_t* buf, int len);
+
 // Generate len random bytes into the provided buffer. On system the random bytes are
 // used for RSA-OAEP padding generation and should preferably be cryptographically secure.
 extern void fotai_generate_random(uint8_t* buf, int len);
