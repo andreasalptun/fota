@@ -52,6 +52,8 @@ const privateEncrKey = '\n-----BEGIN RSA PRIVATE KEY-----\n' +
 const generatorKey = Buffer.from('3371ae3bdfc38d0c11d49e223a265547', 'hex');
 const generatorDifficulty = 3;
 
+const rsaOaepLabel = Buffer.from('846056fdcd920438341e7c8408c3522a0f4ee7778effb09160346dcb6501029d', 'hex');
+
 const modelKeys = {
   'mk1': Buffer.from('519219269431506468c1f899595afe29', 'hex'),
 };
@@ -67,14 +69,19 @@ exports.firmware = functions
   .onRequest(async (req, res) => {
     const AES_KEY_LEN = 16;
     if (req.query.model && req.query.token && modelKeys[req.query.model]) {
-
-      const token = unpad_oaep_sha256(crypto.privateDecrypt({
-        key: privateEncrKey,
-        padding: crypto.constants.RSA_NO_PADDING
-      }, Buffer.from(req.query.token, 'hex')));
-
+      
+      let token;
+      try {
+        token = unpad_oaep_sha256(crypto.privateDecrypt({
+          key: privateEncrKey,
+          padding: crypto.constants.RSA_NO_PADDING
+        }, Buffer.from(req.query.token, 'hex')), rsaOaepLabel);
+      } catch (e) {
+        console.error(e.message);
+      }
+      
       const modelKey = modelKeys[req.query.model];
-      if (modelKey.compare(token, 0, AES_KEY_LEN) == 0) {
+      if (Buffer.isBuffer(token) && modelKey.compare(token, 0, AES_KEY_LEN) == 0) {
         const uniqueKey = token.slice(AES_KEY_LEN, 2 * AES_KEY_LEN);
 
         // Authenticate unique key

@@ -52,7 +52,7 @@ function genmask_oaep_sha256(seed, maskLength) {
  *
  * https://tools.ietf.org/html/rfc3447#section-7.1.2
  */
-module.exports = function(buffer) {
+module.exports = function(buffer, label) {
 
   var hLen = 32;
 
@@ -77,7 +77,7 @@ module.exports = function(buffer) {
   }
 
   var lHash = crypto.createHash('sha256');
-  // lHash.update(label);
+  lHash.update(label);
   lHash = lHash.digest();
 
   var lHashEM = DB.slice(0, hLen);
