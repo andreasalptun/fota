@@ -111,8 +111,8 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
   memcpy(auth_data[2], model_key, sizeof(fota_aes_key_t));
   memcpy(auth_data[3], generator_key, sizeof(fota_aes_key_t));
 
-  fota_sha_hash_t auth_hash;
-  fota_sha_hash_t hash_zero = {0};
+  uint8_t auth_hash[32];
+  uint8_t hash_zero[32] = {0};
 
   for(int i=0; i<num_keys; i++) {
     int j = 0;
@@ -136,7 +136,7 @@ static int generate_unique_keys(const char* model_id, int num_keys) {
       if(memcmp(hash_zero, auth_hash, FOTA_GENERATOR_DIFFICULTY)==0) {
         fprintf(stderr, "Found unique key\n");
         print_array(stdout, auth_data[1], 16);
-        print_array(stderr, auth_hash, sizeof(fota_sha_hash_t));
+        print_array(stderr, auth_hash, sizeof(auth_hash));
         break;
       }
 

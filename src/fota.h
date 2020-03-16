@@ -28,6 +28,9 @@
 #else
 #include "fota-config-sample.h"
 #endif
+
+#define FOTA_SHA_HASH_BITSIZE 160
+
 #include "fota-sanity.h"
 #include <stdint.h>
 
@@ -40,7 +43,7 @@ typedef uint8_t fota_token_t[FOTA_RSA_KEY_BITSIZE/8];
 typedef uint8_t fota_rsa_key_t[FOTA_RSA_KEY_BITSIZE/8];
 typedef uint8_t fota_aes_key_t[FOTA_AES_KEY_BITSIZE/8];
 typedef uint8_t fota_aes_iv_t[16];
-typedef uint8_t fota_sha_hash_t[32]; // sha256
+typedef uint8_t fota_sha_hash_t[FOTA_SHA_HASH_BITSIZE/8];
 
 
 // FOTA API
@@ -92,6 +95,11 @@ extern void fotai_get_unique_key(fota_aes_key_t unique_key);
 // Read a public key (rsa key modulo) from flash memory into the provided buffer.
 // The type parameter is either FOTA_PUBLIC_KEY_TYPE_SIGNING or FOTA_PUBLIC_KEY_TYPE_ENCRYPTION.
 extern void fotai_get_public_key(fota_rsa_key_t public_key, int type);
+
+// Append auxillary data to the token, which will be encrypted together with the keys
+// using RSA-OAEP. This can be any data needed on the server, for example a serial number
+// or other device info. The length depends on the size of the RSA key.
+extern void fotai_get_aux_request_data(uint8_t* buf, int len);
 
 // Generate len random bytes into the provided buffer. On system the random bytes are
 // used for RSA-OAEP padding generation and should preferably be cryptographically secure.

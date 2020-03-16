@@ -69,7 +69,7 @@ exports.firmware = functions
       const token = crypto.privateDecrypt(privateEncrKey, Buffer.from(req.query.token, 'hex'));
       const modelKey = modelKeys[req.query.model];
       if (modelKey.compare(token, 0, AES_KEY_LEN) == 0) {
-        const uniqueKey = token.slice(AES_KEY_LEN);
+        const uniqueKey = token.slice(AES_KEY_LEN, 2*AES_KEY_LEN);
 
         // Authenticate unique key
         const authHash = crypto
@@ -78,6 +78,13 @@ exports.firmware = functions
           .digest();
 
         if (Buffer.alloc(generatorDifficulty).compare(authHash, 0, generatorDifficulty) == 0) {
+          
+          // Get aux data
+          const auxData = token.slice(2*AES_KEY_LEN);
+          
+          // TODO use aux data
+          //console.log(auxData.toString());
+          
           try {
             if (!fwpkEnc) {
               let res = await storage

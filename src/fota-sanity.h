@@ -36,7 +36,7 @@
 #error FOTA_AES_KEY_BITSIZE must be power of two
 #endif
 
-#if FOTA_RSA_KEY_BITSIZE/8-42 < 2*FOTA_AES_KEY_BITSIZE/8
+#if (FOTA_RSA_KEY_BITSIZE/8)-(2*FOTA_SHA_HASH_BITSIZE/8)-2 < 2*FOTA_AES_KEY_BITSIZE/8
 #error RSA key too small or AES key too big (two AES keys must fit in RSA-OAEP encryption)
 #endif
 

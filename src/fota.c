@@ -32,6 +32,8 @@
 #define PROCESS_MODE_VERIFY 0
 #define PROCESS_MODE_INSTALL 1
 
+#define MAX_RSA_DATA_LENGTH ((FOTA_RSA_KEY_BITSIZE/8)-(2*FOTA_SHA_HASH_BITSIZE/8)-2)
+
 typedef struct {
   void* ctx;
   fota_aes_iv_t iv;
@@ -220,9 +222,12 @@ int fota_request_token(fota_token_t token) {
   fotai_get_unique_key(unique_key);
 
   // Create the request token content
-  uint8_t buf[2*sizeof(fota_aes_key_t)];
+  uint8_t buf[MAX_RSA_DATA_LENGTH];
   memcpy(buf, model_key, sizeof(fota_aes_key_t));
   memcpy(buf+sizeof(fota_aes_key_t), unique_key, sizeof(fota_aes_key_t));
+
+  // Add auxillary data to request token
+  fotai_get_aux_request_data(buf+2*sizeof(fota_aes_key_t), MAX_RSA_DATA_LENGTH-2*sizeof(fota_aes_key_t));
 
   // Get the public encryption key
   mbedtls_rsa_context public_key;

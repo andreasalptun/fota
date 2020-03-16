@@ -87,6 +87,22 @@ void fotai_get_public_key(fota_rsa_key_t public_key, int type) {
   }
 }
 
+void fotai_get_aux_request_data(uint8_t* buf, int len) {
+  char tmpbuf[1024];
+  char data[] = "MyAuxData-"; 
+  int datalen = strlen(data);
+  
+  int i=0, k=len;
+  while(k>0) {
+    memcpy(tmpbuf+i*datalen, data, datalen);
+    k-=datalen;
+    i++;
+  }
+  
+  tmpbuf[len-1] = '\0';
+  memcpy(buf, tmpbuf, len);
+}
+
 void fotai_generate_random(uint8_t* buf, int len) {
   FILE* f = fopen("/dev/urandom", "rb");
   fread(buf, 1, len, f);
