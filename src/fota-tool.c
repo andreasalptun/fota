@@ -72,7 +72,7 @@ static int get_model_key(const char* model_id, fota_aes_key_t* model_key) {
       return 1;
     }
   }
-  printf("model not found: %s\n", model_id);
+  printf("Model not found: %s\n", model_id);
   return 0;
 }
 
@@ -363,16 +363,20 @@ int main(int argc, char* argv[]) {
   else if(action == ACTION_VERIFY_PACKAGE) {
 
     g_package_file = fopen(filename, "rb");
-
-    if(fota_verify_package()) {
-      printf("Firmware is verified, proceed to installing the update!\n");
+    if(!g_package_file) {
+      printf("Package file not found: %s\n", filename);
     }
     else {
-      printf("Firmware did not pass verification!\n");
-    }
+      if(fota_verify_package()) {
+        printf("Firmware is verified, proceed to installing the update!\n");
+      }
+      else {
+        printf("Firmware did not pass verification!\n");
+      }
 
-    fclose(g_package_file);
-    g_package_file = NULL;
+      fclose(g_package_file);
+      g_package_file = NULL;
+    }
   }
   else if(action == ACTION_INSTALL_FIRMWARE) {
 
@@ -381,20 +385,26 @@ int main(int argc, char* argv[]) {
     strcat(filename_install, ".inst");
 
     g_package_file = fopen(filename, "rb");
-    g_install_file = fopen(filename_install, "wb");
-
-    if(fota_install_package()) {
-      printf("Firmware is installed to file %s!\n", filename_install);
+    if(!g_package_file) {
+      printf("Package file not found: %s\n", filename);
     }
     else {
-      printf("Firmware installation failed!\n");
+      g_install_file = fopen(filename_install, "wb");
+      assert(g_install_file);
+      
+      if(fota_install_package()) {
+        printf("Firmware is installed to file %s!\n", filename_install);
+      }
+      else {
+        printf("Firmware installation failed!\n");
+      }
+      
+      fclose(g_package_file);
+      fclose(g_install_file);
+      
+      g_package_file = NULL;
+      g_install_file = NULL;
     }
-
-    fclose(g_package_file);
-    fclose(g_install_file);
-
-    g_package_file = NULL;
-    g_install_file = NULL;
 
     free(filename_install);
   }
