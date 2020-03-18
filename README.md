@@ -200,4 +200,5 @@ Run locally (use the `-l` flag when requesting key)
 
 ## TODO
 
--   Proper AES padding (<https://en.wikipedia.org/wiki/Padding_(cryptography)#PKCS#5_and_PKCS#7>
+-   Improved error handling, particularly in fota.c
+-   Return values on fotai functions

@@ -34,6 +34,8 @@
 
 #define MAX_RSA_DATA_LENGTH ((FOTA_RSA_KEY_BITSIZE/8)-(2*FOTA_SHA_HASH_BITSIZE/8)-2)
 
+#define TRY(err) if(err) { goto CATCH; }
+
 typedef struct {
   void* ctx;
   fota_aes_iv_t iv;
@@ -43,6 +45,9 @@ typedef struct {
 // The model key is shared among systems of same revision and should reside in the code segment
 static const char* model_id = FOTA_MODEL_ID_MK1;
 static fota_aes_key_t model_key = FOTA_MODEL_KEY_MK1;
+
+// The hmac key for verifying unencrypted package authenticity
+static fota_hmac_key_t hmac_key = FOTA_HMAC_KEY;
 
 // Static functions
 //
@@ -63,6 +68,43 @@ static void get_public_key(mbedtls_rsa_context* key, int type) {
   mbedtls_mpi_read_binary(&key->N, public_key_mod, sizeof(fota_rsa_key_t));
   mbedtls_mpi_lset (&key->E, OPENSSL_RSA_PUBLIC_EXPONENT);
   key->len = FOTA_RSA_KEY_BITSIZE/8;
+}
+
+// The hmac is only computed on the first four pages (2x ENCC headers,
+// one FWPK header and the RSA signature). This is a optimization to
+// avoid reading every page twice during verification. The remaining
+// pages will be verified by the RSA signature.
+static int verify_hmac() {
+
+  uint8_t storage_page[FOTA_STORAGE_PAGE_SIZE];
+  mbedtls_md_context_t md_ctx;
+  fota_sha_hash_t hmac_computed;
+  fota_sha_hash_t hmac_embedded;
+  int err, res = 0;
+
+  mbedtls_md_init(&md_ctx);
+
+  TRY(mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1));
+
+  TRY(mbedtls_md_hmac_starts(&md_ctx, hmac_key, sizeof(fota_hmac_key_t)));
+
+  for(int i=0; i<4; i++) {
+    fotai_read_storage_page(storage_page, i);
+
+    if(i==0) { // Copy and clear hmac from first page before updating
+      memcpy(hmac_embedded, storage_page+32, sizeof(fota_sha_hash_t));
+      memset(storage_page+32, 0, sizeof(fota_sha_hash_t));
+    }
+
+    TRY(mbedtls_md_hmac_update(&md_ctx, storage_page, FOTA_STORAGE_PAGE_SIZE));
+  }
+  TRY(mbedtls_md_hmac_finish(&md_ctx, hmac_computed));
+
+  res = memcmp(hmac_computed, hmac_embedded, sizeof(fota_sha_hash_t))==0;
+
+CATCH:
+  mbedtls_md_free(&md_ctx);
+  return res;
 }
 
 static void read_storage_page(uint8_t* buf, int page, aes_decrypt_t* decrypt_unique, aes_decrypt_t* decrypt_model) {
@@ -250,6 +292,9 @@ int fota_request_token(fota_token_t token) {
 }
 
 int fota_verify_package(void) {
+  if(!verify_hmac())
+    return 0;
+
   return process_package(PROCESS_MODE_VERIFY);
 }
 

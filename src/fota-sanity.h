@@ -36,6 +36,10 @@
 #error FOTA_AES_KEY_BITSIZE must be power of two
 #endif
 
+#if FOTA_SHA_HASH_BITSIZE > 256
+#error FOTA_SHA_HASH_BITSIZE not supported. To add support, adjust size of fota_hmac_key_t.
+#endif
+
 #if (FOTA_RSA_KEY_BITSIZE/8)-(2*FOTA_SHA_HASH_BITSIZE/8)-2 < 2*FOTA_AES_KEY_BITSIZE/8
 #error RSA key too small or AES key too big (two AES keys must fit in RSA-OAEP encryption)
 #endif

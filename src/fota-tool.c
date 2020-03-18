@@ -48,7 +48,8 @@ typedef struct {
   fota_aes_key_t key;
 } model_key_t;
 
-model_key_t model_keys[] = FOTA_MODEL_KEYS;
+static model_key_t model_keys[] = FOTA_MODEL_KEYS;
+static fota_hmac_key_t hmac_key = FOTA_HMAC_KEY;
 
 extern FILE* g_package_file;
 extern FILE* g_install_file;
@@ -313,6 +314,19 @@ int main(int argc, char* argv[]) {
           fotai_get_unique_key(unique_key);
 
           buffer_t* fwpk_enc2_buf = encrypt_buffer(fwpk_enc_buf, unique_key);
+
+          // Calculate hmac
+          fota_sha_hash_t hmac;
+          int err = mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
+                                    hmac_key,
+                                    sizeof(fota_hmac_key_t),
+                                    fwpk_enc2_buf->data,
+                                    4*FOTA_STORAGE_PAGE_SIZE,
+                                    hmac);
+          assert(!err);
+
+          buf_seekto(fwpk_enc2_buf, 32);
+          buf_write(fwpk_enc2_buf, hmac, sizeof(fota_sha_hash_t));
 
           buf_to_file(filename_out, fwpk_enc2_buf);
 

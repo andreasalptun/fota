@@ -44,7 +44,7 @@ typedef uint8_t fota_rsa_key_t[FOTA_RSA_KEY_BITSIZE/8];
 typedef uint8_t fota_aes_key_t[FOTA_AES_KEY_BITSIZE/8];
 typedef uint8_t fota_aes_iv_t[16];
 typedef uint8_t fota_sha_hash_t[FOTA_SHA_HASH_BITSIZE/8];
-
+typedef uint8_t fota_hmac_key_t[64];
 
 // FOTA API
 //
