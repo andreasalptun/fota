@@ -49,7 +49,7 @@ typedef struct {
 } model_key_t;
 
 static model_key_t model_keys[] = FOTA_MODEL_KEYS;
-static fota_hmac_key_t hmac_key = FOTA_HMAC_KEY;
+static uint8_t hmac_key[] = FOTA_HMAC_KEY;
 
 extern FILE* g_package_file;
 extern FILE* g_install_file;
@@ -319,7 +319,7 @@ int main(int argc, char* argv[]) {
           fota_sha_hash_t hmac;
           int err = mbedtls_md_hmac(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256),
                                     hmac_key,
-                                    sizeof(fota_hmac_key_t),
+                                    sizeof(hmac_key),
                                     fwpk_enc2_buf->data,
                                     4*FOTA_STORAGE_PAGE_SIZE,
                                     hmac);

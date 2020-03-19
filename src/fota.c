@@ -47,7 +47,7 @@ static const char* model_id = FOTA_MODEL_ID_MK1;
 static fota_aes_key_t model_key = FOTA_MODEL_KEY_MK1;
 
 // The hmac key for verifying unencrypted package authenticity
-static fota_hmac_key_t hmac_key = FOTA_HMAC_KEY;
+static uint8_t hmac_key[] = FOTA_HMAC_KEY;
 
 // Static functions
 //
@@ -86,7 +86,7 @@ static int verify_hmac() {
 
   TRY(mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1));
 
-  TRY(mbedtls_md_hmac_starts(&md_ctx, hmac_key, sizeof(fota_hmac_key_t)));
+  TRY(mbedtls_md_hmac_starts(&md_ctx, hmac_key, sizeof(hmac_key)));
 
   for(int i=0; i<4; i++) {
     fotai_read_storage_page(storage_page, i);
