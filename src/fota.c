@@ -277,14 +277,13 @@ int fota_request_token(fota_token_t token) {
   get_public_key(&public_key, FOTA_PUBLIC_KEY_TYPE_ENCRYPTION);
 
   // Encrypt buffer
-#ifdef FOTA_RSA_OAEP_LABEL
-  const uint8_t label[] = FOTA_RSA_OAEP_LABEL;
-  int label_size = sizeof(label);
-#else
-  const uint8_t* label = NULL;
-  int label_size = 0;
-#endif
-  int err = mbedtls_rsa_rsaes_oaep_encrypt(&public_key, generate_random, NULL, MBEDTLS_RSA_PUBLIC, label, label_size, sizeof(buf), (unsigned char*)buf, token);
+  int err = mbedtls_rsa_rsaes_oaep_encrypt(&public_key,
+                                           generate_random, NULL,
+                                           MBEDTLS_RSA_PUBLIC,
+                                           (const unsigned char*)FOTA_RSA_OAEP_LABEL, 
+                                           strlen(FOTA_RSA_OAEP_LABEL),
+                                           sizeof(buf), (unsigned char*)buf,
+                                           token);
 
   mbedtls_rsa_free(&public_key);
 

@@ -52,8 +52,7 @@ const privateEncrKey = '\n-----BEGIN RSA PRIVATE KEY-----\n' +
 const generatorKey = Buffer.from('3371ae3bdfc38d0c11d49e223a265547', 'hex');
 const generatorDifficulty = 3;
 
-const rsaOaepLabel = Buffer.from('846056fdcd920438341e7c8408c3522a0f4ee7778effb09160346dcb6501029d', 'hex');
-const hmacKey = Buffer.from('8f95ca9fbcda99fe8fd5829ea20fabae6d775b0ec22aa9f1b3ade43b598440f54f96b1302bdf342d52153305f601279d3d7aa8e844f130f00d20b5dfa0dc17e2', 'hex');
+const hmacKey = Buffer.from('8f95ca9fbcda99fe8fd5829ea20fabae6d775b0ec22aa9f1b3ade43b598440f5', 'hex');
 
 const modelKeys = {
   'mk1': Buffer.from('519219269431506468c1f899595afe29', 'hex'),
@@ -76,7 +75,7 @@ exports.firmware = functions
         token = unpad_oaep_sha256(crypto.privateDecrypt({
           key: privateEncrKey,
           padding: crypto.constants.RSA_NO_PADDING
-        }, Buffer.from(req.query.token, 'hex')), rsaOaepLabel);
+        }, Buffer.from(req.query.token, 'hex')), "fota-request-token");
       } catch (e) {
         console.error(e.message);
       }
