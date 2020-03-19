@@ -290,13 +290,13 @@ int fota_request_token(fota_token_t token) {
   return !err;
 }
 
-int fota_verify_package(void) {
+int fota_verify_package() {
   if(!verify_hmac())
     return 0;
 
   return process_package(PROCESS_MODE_VERIFY);
 }
 
-int fota_install_package(void) {
+int fota_install_package() {
   return process_package(PROCESS_MODE_INSTALL);
 }

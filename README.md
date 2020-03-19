@@ -2,7 +2,7 @@
 
 FOTA is a lightweight (&lt;50kb) signing and encryption tool/library for embedded systems written in pure c. 
 
-No networking or bootloader in included, making it suitable for most platforms. The general idea is to let a smartphone ask the system for a request token, use it to download an encrypted firmware package and then transfer the package to the system over bluetooth (or similar). The system itself will then decrypt and verify the firmware, before installing it, making sure no secret keys ever leaves the system.
+No networking or bootloader in included, making it suitable for most platforms. The general idea is to let a smartphone fetch a request token from the system, use it to download an encrypted firmware package and then transfer the package to the system over bluetooth (or similar). The system itself will then decrypt and verify the firmware, before installing it, making sure no secret keys ever leaves the system.
 
 FOTA is licensed under the MIT license. It depends on the ARM mbed-crypto for cryptographic functions (<https://github.com/ARMmbed/mbed-crypto>), which is licensed under the Apache-2.0 license.
 
@@ -28,7 +28,7 @@ To test locally, copy the package hex (printed to stdout if uncommented in fota-
 
 ## Get a request token
 
-A request token is a hex string used to fetch the encrypted firmware package from the server. It's length will depend on the RSA key size; a 1024 bit key will generate 128 byte token. 
+A request token is a hex string used to fetch the encrypted firmware package from the server. A new string will be generated each time. It's length will depend on the RSA key size; a 1024 bit key will generate 128 byte token. 
 
 Use `fota-tool -r` to get a request token for testing. Copy and run the curl command printed to download the firmware package. Add the `-l` flag when testing locally.
 
@@ -36,25 +36,27 @@ On system, the request token is generated using the `int fota_request_token(fota
 
 The request token is simply the model key concatenated with the unique key, which is then encrypted with the public encryption key using RSA-OAEP. The data is short enough to be encrypted directly without the need for an intermediary AES key, assuming the RSA key is at least 1024 bits.
 
+Extra data can be embedded in the encrypted token. This can be any data needed on the server, for example a serial number or other device info. The available length depends on the size of the RSA key. See `fotai_get_aux_request_data`.
+
 The private encryption key is only known to the server, the model key must match and the unique key must be valid (see section _Generate unique keys_ below). This makes it impossible to create a token for a unit without having direct access to the data stored on that particular unit (in code segment and flash storage).
 
 ## Unique key encryption layer
 
-When the server gets a request with a valid token, it uses the unique key to add an extra layer of AES-128-CBC encryption before responding. This makes the downloaded firmware package unique for that particular unit and verification will fail on any other unit.
+When the server gets a request with a valid token, it uses the unique key to add an extra layer of AES-128-CBC encryption and adds a HMAC before responding. This makes the downloaded firmware package unique for that particular unit and verification will fail on any other unit.
 
 ## Verify the firmware package
 
 Use `fota-tool -v <model>.fwpk.enc2` to verify the downloaded firmware package.
 
-On system, the downloaded firmware package must be verified and unwrapped before being installed. This is done using the `int fota_verify_package(void)` function. After successful verification, the firmware can be installed using the function `int fota_install_package(void)`. For more information, see the API and integration section below.
+On system, the downloaded firmware package must be verified and unwrapped before being installed. This is done using the `int fota_verify_package()` function. After successful verification, the firmware can be installed using the function `int fota_install_package()`. For more information, see the API and integration section below.
 
-The downloaded package (`<model>.fwpk.enc2`) is decrypted in two iterations, first using the unique key and then using the model key. The model identifier is matched and the signature is verified with the public signing key using RSA-PSS.
+The HMAC of the downloaded package (`<model>.fwpk.enc2`) is first verified, then the package is decrypted in two iterations, first using the unique key and then using the model key. The model identifier is matched and the signature is verified with the public signing key using RSA-PSS.
 
 ## Generate unique keys
 
 Each shipped unit must have a unique key. Unique keys are easily generated using `fota-tool -m<model> -g<num-keys>` where _model_ is a string matching the platform. Use model `mk1` for testing. 
 
-The unique key can easily be validated on the server without the need for a database, because of its _leading-sha-zeros_ property:
+The unique key can easily be validated on the server without the need for a database, because of its _leading-hash-zeros_ property:
 
 `SHA256(generatorKey + uniqueKey + modelKey + generatorKey) = 000000HEXHASH`
 
@@ -85,11 +87,13 @@ Copy the private exponent from the `private.txt` file to `fota-config.h` and ref
 
 Copy the private encryption key pem to firebase/functions/index.js. Note: the private key should not be stored in clear text like in the example.
 
-## Generate model and generator keys
+## Generate hmac, model and generator keys
 
 Generate random keys for the model key and the generator key using
 
 `openssl rand 32 | xxd -i -c 32`
+
+Use the same function for the hmac key but change the size to 64.
 
 Copy these random keys to `fota-config.h` and `firebase/function/index.js`
 
@@ -112,7 +116,7 @@ typedef uint8_t fota_aes_iv_t[16];
 //
 
 // Returns a static model id string, do not free
-const char* fota_model_id(void);
+const char* fota_model_id();
 
 // Generates a request token for downloading the firmware package from server.
 // The generated token in placed in the fota_token_t buffer.
@@ -124,7 +128,7 @@ int fota_request_token(fota_token_t token);
 // firmware package is stored. Uses fotai_aes_* for AES decryption.
 // No data is modified during this process.
 // Returns 1 if the firmware signature is valid.
-int fota_verify_package(void);
+int fota_verify_package();
 
 // Decrypt and install the package.
 // Uses fotai_read_storage_page to read pages from the memory where the downloaded
@@ -133,7 +137,7 @@ int fota_verify_package(void);
 // This function does not check the signature. Call fota_verify_package and
 // check the result before installing.
 // Returns 1 if the firmware was installed successfully.
-int fota_install_package(void);
+int fota_install_package();
 
 
 // FOTA integration functions, must be supplied by the system. Example integration in fota-integration.c
@@ -160,8 +164,8 @@ extern void fotai_get_public_key(fota_rsa_key_t public_key, int type);
 
 // Append auxillary data to the token, which will be encrypted together with the keys
 // using RSA-OAEP. This can be any data needed on the server, for example a serial number
-// or other device info. The length depends on the size of the RSA key.
-extern void fotai_get_aux_request_data(uint8_t* buf, int len);
+// or other device info. The max length depends on the size of the RSA key.
+extern void fotai_get_aux_request_data(uint8_t* buf, int max_len);
 
 // Generate len random bytes into the provided buffer. On system the random bytes are
 // used for RSA-OAEP padding generation and should preferably be cryptographically secure.

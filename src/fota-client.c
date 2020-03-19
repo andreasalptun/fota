@@ -28,7 +28,7 @@ void fotai_write_firmware_page(uint8_t* buf, int page, int len) {}
 void fotai_get_unique_key(fota_aes_key_t unique_key) {}
 void fotai_get_public_key(fota_rsa_key_t public_key, int type) {}
 
-void fotai_get_aux_request_data(uint8_t* buf, int len) {}
+void fotai_get_aux_request_data(uint8_t* buf, int max_len) {}
 
 void fotai_generate_random(uint8_t* buf, int len) {}
 

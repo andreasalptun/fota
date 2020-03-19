@@ -50,7 +50,7 @@ typedef uint8_t fota_sha_hash_t[FOTA_SHA_HASH_BITSIZE/8];
 //
 
 // Returns a static model id string, do not free
-const char* fota_model_id(void);
+const char* fota_model_id();
 
 // Generates a request token for downloading the firmware package from server.
 // The generated token in placed in the fota_token_t buffer.
@@ -62,7 +62,7 @@ int fota_request_token(fota_token_t token);
 // firmware package is stored. Uses fotai_aes_* for AES decryption.
 // No data is modified during this process.
 // Returns 1 if the firmware signature is valid.
-int fota_verify_package(void);
+int fota_verify_package();
 
 // Decrypt and install the package.
 // Uses fotai_read_storage_page to read pages from the memory where the downloaded
@@ -71,7 +71,7 @@ int fota_verify_package(void);
 // This function does not check the signature. Call fota_verify_package and
 // check the result before installing.
 // Returns 1 if the firmware was installed successfully.
-int fota_install_package(void);
+int fota_install_package();
 
 
 // FOTA integration functions, must be supplied by the system. Example integration in fota-integration.c
@@ -98,8 +98,8 @@ extern void fotai_get_public_key(fota_rsa_key_t public_key, int type);
 
 // Append auxillary data to the token, which will be encrypted together with the keys
 // using RSA-OAEP. This can be any data needed on the server, for example a serial number
-// or other device info. The length depends on the size of the RSA key.
-extern void fotai_get_aux_request_data(uint8_t* buf, int len);
+// or other device info. The max length depends on the size of the RSA key.
+extern void fotai_get_aux_request_data(uint8_t* buf, int max_len);
 
 // Generate len random bytes into the provided buffer. On system the random bytes are
 // used for RSA-OAEP padding generation and should preferably be cryptographically secure.
