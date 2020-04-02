@@ -199,7 +199,7 @@ static int process_package(int mode) {
         }
         res = 1;
       }
-      else {
+      else { // PROCESS_MODE_VERIFY
         mbedtls_sha256_context sha_ctx;
         fota_rsa_key_t firmware_sign;
         fota_sha_hash_t firmware_hash;
