@@ -352,8 +352,8 @@ int main(int argc, char* argv[]) {
   }
   else if(action == ACTION_REQUEST_TOKEN) {
     fota_token_t token;
-    int res = fota_request_token(token);
-    assert(res!=0);
+    int err = fota_request_token(token);
+    assert(err==FOTA_NO_ERROR);
 
     char token_hex[2*sizeof(fota_token_t)+1];
     char* p = token_hex;
@@ -382,12 +382,13 @@ int main(int argc, char* argv[]) {
     }
     else {
       fota_sha_hash_t firmware_hash;
-      if(fota_verify_package(firmware_hash)) {
+      int err = fota_verify_package(firmware_hash);
+      if(err==FOTA_NO_ERROR) {
         printf("Firmware is verified, proceed to installing the update!\n");
         print_array(stdout, firmware_hash, sizeof(fota_sha_hash_t));
       }
       else {
-        printf("Firmware did not pass verification!\n");
+        printf("Firmware did not pass verification! (error=%d)\n", err);
       }
 
       fclose(g_package_file);
@@ -408,11 +409,12 @@ int main(int argc, char* argv[]) {
       g_install_file = fopen(filename_install, "wb");
       assert(g_install_file);
       
-      if(fota_install_package()) {
+      int err = fota_install_package();
+      if(err==FOTA_NO_ERROR) {
         printf("Firmware is installed to file %s!\n", filename_install);
       }
       else {
-        printf("Firmware installation failed!\n");
+        printf("Firmware installation failed! (error=%d)\n", err);
       }
       
       fclose(g_package_file);

@@ -22,18 +22,18 @@
 
 #include "fota.h"
 
-void fotai_read_storage_page(uint8_t* buf, int page) {}
-void fotai_write_firmware_page(uint8_t* buf, int page, int len) {}
+int fotai_read_storage_page(uint8_t* buf, int page) { return FOTA_NO_ERROR; }
+int fotai_write_firmware_page(uint8_t* buf, int page, int len) { return FOTA_NO_ERROR; }
 
-void fotai_get_unique_key(fota_aes_key_t unique_key) {}
-void fotai_get_public_key(fota_rsa_key_t public_key, int type) {}
+int fotai_get_unique_key(fota_aes_key_t unique_key) { return FOTA_NO_ERROR; }
+int fotai_get_public_key(fota_rsa_key_t public_key, int type) { return FOTA_NO_ERROR; }
 
 void fotai_get_aux_request_data(uint8_t* buf, int max_len) {}
 
 void fotai_generate_random(uint8_t* buf, int len) {}
 
-void fotai_aes_decrypt_init(fota_aes_key_t key, void** ctx) {}
-void fotai_aes_decrypt_block(fota_aes_key_t key, uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx) {}
+int fotai_aes_decrypt_init(fota_aes_key_t key, void** ctx) { return FOTA_NO_ERROR; }
+int fotai_aes_decrypt_block(fota_aes_key_t key, uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx) { return FOTA_NO_ERROR; }
 void fotai_aes_decrypt_free(void* ctx) {}
 
 int main() {

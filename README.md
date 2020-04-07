@@ -202,7 +202,3 @@ Run locally (use the `-l` flag when requesting key)
 
 `firebase emulators:start`
 
-## TODO
-
--   Improved error handling, particularly in fota.c
--   Return values on fotai functions
