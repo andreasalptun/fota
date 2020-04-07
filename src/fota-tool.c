@@ -381,8 +381,10 @@ int main(int argc, char* argv[]) {
       printf("Package file not found: %s\n", filename);
     }
     else {
-      if(fota_verify_package()) {
+      fota_sha_hash_t firmware_hash;
+      if(fota_verify_package(firmware_hash)) {
         printf("Firmware is verified, proceed to installing the update!\n");
+        print_array(stdout, firmware_hash, sizeof(fota_sha_hash_t));
       }
       else {
         printf("Firmware did not pass verification!\n");

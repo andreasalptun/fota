@@ -27,6 +27,8 @@
 
 // System config
 //
+// If defined, do not use the le32toh/htole32 functions
+#define FOTA_SYSTEM_LITTLE_ENDIAN
 // Page size of the memory on which the downloaded firmware package is stored, usually an external flash chip
 #define FOTA_STORAGE_PAGE_SIZE 256
 // Page size of the memory where the firmware will be installed, usually internal flash

@@ -116,7 +116,7 @@ void fotai_aes_decrypt_init(fota_aes_key_t key, void** ctx) {
   *ctx = aes_ctx;
 }
 
-void fotai_aes_decrypt_block(uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx) {
+void fotai_aes_decrypt_block(fota_aes_key_t key, uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx) {
   mbedtls_aes_crypt_cbc((mbedtls_aes_context*)ctx,
                         MBEDTLS_AES_DECRYPT,
                         FOTA_STORAGE_PAGE_SIZE,

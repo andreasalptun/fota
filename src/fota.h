@@ -62,7 +62,10 @@ int fota_request_token(fota_token_t token);
 // firmware package is stored. Uses fotai_aes_* for AES decryption.
 // No data is modified during this process.
 // Returns 1 if the firmware signature is valid.
-int fota_verify_package();
+// The firmware hash is written to the provided firmware_hash buffer if verification
+// is successful. This can be used to check the integrity of the installed data 
+// after writing it to flash memory. The hash algorithm used is SHA-256.
+int fota_verify_package(fota_sha_hash_t firmware_hash);
 
 // Decrypt and install the package.
 // Uses fotai_read_storage_page to read pages from the memory where the downloaded
@@ -114,7 +117,7 @@ extern void fotai_aes_decrypt_init(fota_aes_key_t key, void** ctx);
 // to be called multiple times for consecutive blocks. The block len is a multiple of
 // of 16 bytes. If a context is provided in the init function, it will be accessible
 // from the ctx pointer.
-extern void fotai_aes_decrypt_block(uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx);
+extern void fotai_aes_decrypt_block(fota_aes_key_t key, uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx);
 
 // Releases memory allocated by the init function, if necessary. If a context is provided
 // in the init function, it will be accessible from the ctx pointer.

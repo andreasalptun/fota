@@ -33,7 +33,7 @@ void fotai_get_aux_request_data(uint8_t* buf, int max_len) {}
 void fotai_generate_random(uint8_t* buf, int len) {}
 
 void fotai_aes_decrypt_init(fota_aes_key_t key, void** ctx) {}
-void fotai_aes_decrypt_block(uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx) {}
+void fotai_aes_decrypt_block(fota_aes_key_t key, uint8_t* in, uint8_t* out, int len, fota_aes_iv_t iv, void* ctx) {}
 void fotai_aes_decrypt_free(void* ctx) {}
 
 int main() {
@@ -41,8 +41,8 @@ int main() {
   fota_token_t token;
   if(!fota_request_token(token))
     return 1;
-
-  if(!fota_verify_package()) {
+  fota_sha_hash_t firmware_hash;
+  if(!fota_verify_package(firmware_hash)) {
     return 1;
   }
 

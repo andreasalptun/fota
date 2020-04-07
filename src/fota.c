@@ -25,6 +25,9 @@
 #endif
 #include <stdlib.h>
 #include <string.h>
+#ifndef FOTA_SYSTEM_LITTLE_ENDIAN
+#include <endian.h>
+#endif
 #include "mbedtls/rsa.h"
 #include "mbedtls/sha256.h"
 #include "fota.h"
@@ -37,9 +40,10 @@
 #define TRY(err) if(err) { goto CATCH; }
 
 typedef struct {
-  void* ctx;
+  fota_aes_key_t key;
   fota_aes_iv_t iv;
   uint32_t len;
+  void* ctx;
 } aes_decrypt_t;
 
 // The model key is shared among systems of same revision and should reside in the code segment
@@ -121,18 +125,30 @@ static void read_storage_page(uint8_t* buf, int page, aes_decrypt_t* decrypt_uni
   fotai_read_storage_page(b0, page);
 
   if(page>0 && decrypt_unique) {
-    fotai_aes_decrypt_block(b0, b1, FOTA_STORAGE_PAGE_SIZE, decrypt_unique->iv, decrypt_unique->ctx);
+    fotai_aes_decrypt_block(decrypt_unique->key, b0, b1, FOTA_STORAGE_PAGE_SIZE, decrypt_unique->iv, decrypt_unique->ctx);
+
+    // Update the initialization vector to the last 16 bytes of the input buffer
+    // See https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Cipher_Block_Chaining_(CBC)
+    memcpy(decrypt_unique->iv, b0+FOTA_STORAGE_PAGE_SIZE-16, 16);
   }
   if(page>1 && decrypt_model) {
-    fotai_aes_decrypt_block(b1, b0, FOTA_STORAGE_PAGE_SIZE, decrypt_model->iv, decrypt_model->ctx);
+    fotai_aes_decrypt_block(decrypt_model->key, b1, b0, FOTA_STORAGE_PAGE_SIZE, decrypt_model->iv, decrypt_model->ctx);
+
+    // Update the initialization vector to the last 16 bytes of the input buffer
+    memcpy(decrypt_model->iv, b1+FOTA_STORAGE_PAGE_SIZE-16, 16);
   }
 }
 
 static void decrypt_init(aes_decrypt_t* decrypt, fota_aes_key_t key, uint8_t* buf) {
   if(memcmp(buf, "ENCC", 4)==0) {
     fotai_aes_decrypt_init(key, &decrypt->ctx);
+#ifdef FOTA_SYSTEM_LITTLE_ENDIAN
+    decrypt->len = *((uint32_t*)(buf + 4));
+#else
     decrypt->len = le32toh(*((uint32_t*)(buf + 4)));
+#endif
     memcpy(decrypt->iv, buf+16, sizeof(fota_aes_iv_t));
+    memcpy(decrypt->key, key, sizeof(fota_aes_key_t));
   }
 }
 
@@ -140,7 +156,7 @@ static void decrypt_free(aes_decrypt_t* decrypt) {
   fotai_aes_decrypt_free(decrypt->ctx);
 }
 
-static int process_package(int mode) {
+static int process_package(int mode, fota_sha_hash_t firmware_hash) {
   uint8_t storage_page[FOTA_STORAGE_PAGE_SIZE];
   aes_decrypt_t decrypt_unique, decrypt_model;
   int res = 0;
@@ -162,11 +178,15 @@ static int process_package(int mode) {
 
   if(memcmp(storage_page, "FWPK", 4)==0) {
 
+#ifdef FOTA_SYSTEM_LITTLE_ENDIAN
+    uint32_t firmware_len = *((uint32_t*)(storage_page+4));
+#else
     uint32_t firmware_len = le32toh(*((uint32_t*)(storage_page+4)));
+#endif
 
     if(strcmp((const char*)(storage_page+16), model_id)==0) {
 
-      // Read firmware signature (must read all pages consecutively)
+      // Read firmware signature (must read pages consecutively because of AES block chaining)
       read_storage_page(storage_page, 3, &decrypt_unique, &decrypt_model);
 
       if(mode == PROCESS_MODE_INSTALL) {
@@ -202,7 +222,6 @@ static int process_package(int mode) {
       else { // PROCESS_MODE_VERIFY
         mbedtls_sha256_context sha_ctx;
         fota_rsa_key_t firmware_sign;
-        fota_sha_hash_t firmware_hash;
 
         memcpy(firmware_sign, storage_page, sizeof(fota_rsa_key_t));
 
@@ -237,11 +256,11 @@ static int process_package(int mode) {
         mbedtls_rsa_free(&public_key);
       }
     }
-    else {
 #ifdef FOTA_TOOL
+    else {
       fprintf(stderr, "Error: Bad model id\n");
-#endif
     }
+#endif  
   }
 
   decrypt_free(&decrypt_unique);
@@ -280,7 +299,7 @@ int fota_request_token(fota_token_t token) {
   int err = mbedtls_rsa_rsaes_oaep_encrypt(&public_key,
                                            generate_random, NULL,
                                            MBEDTLS_RSA_PUBLIC,
-                                           (const unsigned char*)FOTA_RSA_OAEP_LABEL, 
+                                           (const unsigned char*)FOTA_RSA_OAEP_LABEL,
                                            strlen(FOTA_RSA_OAEP_LABEL),
                                            sizeof(buf), (unsigned char*)buf,
                                            token);
@@ -290,13 +309,13 @@ int fota_request_token(fota_token_t token) {
   return !err;
 }
 
-int fota_verify_package() {
-  if(!verify_hmac())
+int fota_verify_package(fota_sha_hash_t firmware_hash) {
+  if(!firmware_hash || !verify_hmac())
     return 0;
 
-  return process_package(PROCESS_MODE_VERIFY);
+  return process_package(PROCESS_MODE_VERIFY, firmware_hash);
 }
 
 int fota_install_package() {
-  return process_package(PROCESS_MODE_INSTALL);
+  return process_package(PROCESS_MODE_INSTALL, NULL);
 }
