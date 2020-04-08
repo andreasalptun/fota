@@ -2,7 +2,9 @@
 
 FOTA is a lightweight (&lt;50kb) signing and encryption tool/library for embedded systems written in pure c. 
 
-No networking or bootloader in included, making it suitable for most platforms. The general idea is to let a smartphone fetch a request token from the system, use it to download an encrypted firmware package and then transfer the package to the system over bluetooth (or similar). The system itself will then decrypt and verify the firmware, before installing it, making sure no secret keys ever leaves the system.
+No networking or bootloader in included, making it suitable for most platforms. The general idea is to let a smartphone app fetch a request token from the embedded system, use it to download an encrypted and signed firmware package and then transfer the package to the system over bluetooth (or similar). The system itself will then decrypt and verify the firmware before installing it.
+
+The crypto algorithms used are RSA-PSS for firmware signing, AES-128 for package encryption and RSA-OAEP for token encryption. The hashing algorithm used for signature and HMAC is SHA-256.
 
 FOTA is licensed under the MIT license. It depends on the ARM mbed-crypto for cryptographic functions (<https://github.com/ARMmbed/mbed-crypto>), which is licensed under the Apache-2.0 license.
 
@@ -18,7 +20,7 @@ Samples keys are used by default. Always create your own keys before using this 
 
 ## Create a firmware package
 
-To create a signed and encrypted firmware package, use `fota-tool -m<model> -f<firmware binary>` where _model_ is a string different for each platform (if applicable). Use model `mk1` for testing.
+To create a signed and encrypted firmware package, use `fota-tool -m<model> -f<firmware binary>` where _model_ is a string different for each platform (if applicable). Use model `mk1` for testing. Add a `-2` option to create a file ready for verification and installing, bypassing the server. Use this for testing only!
 
 The output is a file called `<model>.fwpk.enc`, which is signed using RSA-PSS and encrypted with the model key using AES-128-CBC.
 
@@ -48,7 +50,9 @@ When the server gets a request with a valid token, it uses the unique key to add
 
 Use `fota-tool -v <model>.fwpk.enc2` to verify the downloaded firmware package.
 
-On system, the downloaded firmware package must be verified and unwrapped before being installed. This is done using the `int fota_verify_package()` function. After successful verification, the firmware can be installed using the function `int fota_install_package()`. For more information, see the API and integration section below.
+On system, the downloaded firmware package must be verified before being installed. This is done using the `int fota_verify_package(fota_sha_hash_t firmware_hash)` function. After successful verification, the firmware can be installed using the function `int fota_install_package()`. 
+
+The firmware hash is written to the provided `firmware_hash` buffer during verification. This can be used to check the integrity of the installed data after writing it to flash memory. For more information, see the API and integration section below.
 
 The HMAC of the downloaded package (`<model>.fwpk.enc2`) is first verified, then the package is decrypted in two iterations, first using the unique key and then using the model key. The model identifier is matched and the signature is verified with the public signing key using RSA-PSS.
 
@@ -195,7 +199,6 @@ extern int fotai_aes_decrypt_block(fota_aes_key_t key, uint8_t* in, uint8_t* out
 // Releases memory allocated by the init function, if necessary. If a context is provided
 // in the init function, it will be accessible from the ctx pointer.
 extern void fotai_aes_decrypt_free(void* ctx);
-
 ```
 
 ## Firebase
