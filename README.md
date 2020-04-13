@@ -107,9 +107,21 @@ Copy these random keys to `fota-config.h` and `firebase/function/index.js`
 // Definitions
 //
 
+// Errors
+#define FOTA_NO_ERROR                  0
+#define FOTA_ERROR_BAD_ARGUMENTS       1
+#define FOTA_ERROR_BAD_MODEL           2
+#define FOTA_ERROR_DATA_MALFORMED      3
+#define FOTA_ERROR_VERIFICATION_FAILED 4
+#define FOTA_ERROR_READ_FAILED         5
+#define FOTA_ERROR_WRITE_FAILED        6
+#define FOTA_ERROR_AES_DECRYPT_FAILED  7
+
+// Type for fotai_get_public_key function
 #define FOTA_PUBLIC_KEY_TYPE_SIGNING    0
 #define FOTA_PUBLIC_KEY_TYPE_ENCRYPTION 1
 
+// Typedefs
 typedef uint8_t fota_token_t[FOTA_RSA_KEY_BITSIZE/8];
 typedef uint8_t fota_rsa_key_t[FOTA_RSA_KEY_BITSIZE/8];
 typedef uint8_t fota_aes_key_t[FOTA_AES_KEY_BITSIZE/8];
