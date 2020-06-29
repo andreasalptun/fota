@@ -247,7 +247,7 @@ static int process_package(int mode, fota_sha_hash_t firmware_hash) {
       firmware_page_offset += FOTA_STORAGE_PAGE_SIZE;
 
       // Write one firmware page
-      if(firmware_page_offset >= FOTA_INSTALL_PAGE_SIZE || n < FOTA_STORAGE_PAGE_SIZE) {
+      if(firmware_page_offset >= FOTA_INSTALL_PAGE_SIZE || remaining == 0) {
         try(fotai_write_firmware_page(firmware_page_buf,
                                       firmware_page_index++,
                                       firmware_page_len));
