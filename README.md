@@ -1,8 +1,8 @@
 # FOTA - Firmware signing and encryption for over-the-air transfer
 
-FOTA is a lightweight (&lt;50kb) signing and encryption tool/library for embedded systems written in pure c. 
+FOTA is a lightweight (&lt;50kb) signing and encryption tool/library for embedded systems, written in pure c. 
 
-No networking or bootloader in included, making it suitable for most platforms. The general idea is to let a smartphone app fetch a request token from the embedded system, use it to download an encrypted and signed firmware package and then transfer the package to the system over bluetooth (or similar). The system itself will then decrypt and verify the firmware before installing it.
+No networking or bootloader is included, making it suitable for most platforms. The general idea is to let a smartphone app fetch a request token from the embedded system, use it to download an encrypted and signed firmware package and then transfer the package back to the system over bluetooth (or similar). The system itself will then decrypt and verify the firmware before installing it.
 
 The crypto algorithms used are RSA-PSS for firmware signing, AES-128 for package encryption and RSA-OAEP for token encryption. The hashing algorithm used for signature and HMAC is SHA-256.
 
