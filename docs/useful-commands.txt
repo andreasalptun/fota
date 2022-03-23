@@ -3,5 +3,6 @@ openssl rsa -in keys/private.pem -text -noout  # export rsa key components
 openssl dgst -sha256 -sign keys/private.pem -out myfile.sig myfile # Sign hash
 openssl dgst -sha256 myfile # Print hash
 
+echo -n 2f27b9417fad2e5178b4bb10d82afa89 | xxd -r -p > myfile.bin  # hex string to binary file
 xxd -p -c 256 myfile.sig | xclip  # binary to hex to clipboard
 xxd -p -i myfile.sig  # binary to c include
